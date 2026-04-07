@@ -1,0 +1,196 @@
+import type { PrismaClient } from "@/generated/prisma/client";
+import {
+  MessageDeliveryStatus,
+  MessageDirection,
+  ReminderChannel,
+} from "@/generated/prisma/enums";
+import { formatDateInTimeZone, parseUtcDateFromYmd } from "@/lib/calendar-date";
+import { getLearnToPrayUrl } from "@/lib/env";
+import { logger } from "@/lib/logger";
+import { normalizeEmail, normalizePhoneE164 } from "@/lib/normalize";
+import { createEmailProvider } from "@/lib/providers/email";
+import { createMockSmsProvider } from "@/lib/providers/sms";
+import { sessionUrl } from "@/lib/public-url";
+import { findLatestOpenCycleForAck } from "@/lib/reminder-cycle";
+
+const INBOUND_LOG = "inbound_message";
+const OUTBOUND = {
+  stop: "stop_reply",
+  help: "help_reply",
+  ack: "ack_reply",
+} as const;
+
+export type InboundChannel = "email" | "sms";
+
+export async function handleInbound(
+  prisma: PrismaClient,
+  channel: InboundChannel,
+  fromRaw: string,
+  bodyRaw: string,
+): Promise<{ outcome: string }> {
+  const body = bodyRaw.trim();
+  const upper = body.toUpperCase();
+
+  let from: string;
+  try {
+    from = channel === "email" ? normalizeEmail(fromRaw) : normalizePhoneE164(fromRaw);
+  } catch {
+    logger.warn("inbound", "Invalid inbound address", {
+      channel,
+      fromPrefix: fromRaw.slice(0, 6),
+    });
+    return { outcome: "invalid_address" };
+  }
+
+  const session =
+    channel === "email"
+      ? await prisma.session.findFirst({
+          where: { emailAddress: from },
+        })
+      : await prisma.session.findFirst({
+          where: { phoneNumber: from },
+        });
+
+  const reminderChannel =
+    channel === "email" ? ReminderChannel.email : ReminderChannel.sms;
+
+  if (!session) {
+    logger.info("inbound", "Inbound: no session for address", {
+      channel,
+    });
+    return { outcome: "no_session" };
+  }
+
+  const sess = session;
+
+  await prisma.messageLog.create({
+    data: {
+      sessionId: sess.id,
+      channel: reminderChannel,
+      type: INBOUND_LOG,
+      direction: MessageDirection.inbound,
+      to: from.length > 320 ? `${from.slice(0, 317)}...` : from,
+      body: body.slice(0, 8000),
+      status: MessageDeliveryStatus.sent,
+    },
+  });
+
+  const email = createEmailProvider(prisma);
+  const sms = createMockSmsProvider(prisma);
+
+  async function sendOutbound(text: string, messageLogType: string): Promise<void> {
+    if (channel === "email" && sess.emailAddress) {
+      await email.send(
+        sess.emailAddress,
+        "Mawqit",
+        text,
+        { sessionId: sess.id, messageLogType },
+      );
+    } else if (channel === "sms" && sess.phoneNumber) {
+      await sms.send(sess.phoneNumber, text, {
+        sessionId: sess.id,
+        messageLogType,
+      });
+    }
+  }
+
+  if (upper === "STOP") {
+    await prisma.channelStatus.upsert({
+      where: {
+        sessionId_channel: {
+          sessionId: sess.id,
+          channel: reminderChannel,
+        },
+      },
+      create: {
+        sessionId: sess.id,
+        channel: reminderChannel,
+        disabled: true,
+        disabledAt: new Date(),
+      },
+      update: {
+        disabled: true,
+        disabledAt: new Date(),
+      },
+    });
+
+    const label = channel === "email" ? "email" : "SMS";
+    await sendOutbound(
+      `Notifications for ${label} have been stopped.`,
+      OUTBOUND.stop,
+    );
+    logger.info("inbound", "Inbound: STOP received, channel disabled", {
+      sessionIdPrefix: sess.id.slice(0, 8),
+      channel: reminderChannel,
+    });
+    return { outcome: "stop" };
+  }
+
+  if (upper === "HELP") {
+    const link = sessionUrl(sess.id);
+    const learn = getLearnToPrayUrl();
+    const text = [
+      `Your session link: ${link}`,
+      `Learn to pray: ${learn}`,
+      "Reply STOP to stop notifications, HELP for this message, or any other reply to acknowledge the current prayer reminder.",
+    ].join("\n");
+    await sendOutbound(text, OUTBOUND.help);
+    logger.info("inbound", "Inbound: HELP", {
+      sessionIdPrefix: sess.id.slice(0, 8),
+    });
+    return { outcome: "help" };
+  }
+
+  if (!body) {
+    logger.info("inbound", "Inbound: empty body", {
+      sessionIdPrefix: sess.id.slice(0, 8),
+    });
+    return { outcome: "empty" };
+  }
+
+  const tz = sess.timezone;
+  if (!tz) {
+    logger.info("inbound", "Inbound: ack skipped (no timezone)", {
+      sessionIdPrefix: sess.id.slice(0, 8),
+    });
+    return { outcome: "no_timezone" };
+  }
+
+  const ymd = formatDateInTimeZone(new Date(), tz);
+  const prayerDate = parseUtcDateFromYmd(ymd);
+
+  const cycle = await findLatestOpenCycleForAck(prisma, {
+    sessionId: sess.id,
+    channel: reminderChannel,
+    prayerDate,
+    now: new Date(),
+    session: {
+      latitude: sess.latitude,
+      longitude: sess.longitude,
+      timezone: sess.timezone,
+      prayerMethod: sess.prayerMethod,
+    },
+  });
+
+  if (!cycle) {
+    logger.info("inbound", "Inbound: no active reminder cycle for ack", {
+      sessionIdPrefix: sess.id.slice(0, 8),
+    });
+    return { outcome: "no_active_cycle" };
+  }
+
+  await prisma.reminderCycle.update({
+    where: { id: cycle.id },
+    data: { ackReceived: true },
+  });
+
+  await sendOutbound(
+    "Got it. Reminders for this prayer have stopped.",
+    OUTBOUND.ack,
+  );
+  logger.info("inbound", "Inbound: ack received, persistence stopped", {
+    sessionIdPrefix: sess.id.slice(0, 8),
+    prayer: cycle.prayerName,
+  });
+  return { outcome: "ack" };
+}

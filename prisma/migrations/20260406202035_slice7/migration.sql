@@ -1,0 +1,2 @@
+-- RenameIndex
+ALTER INDEX "reminder_cycles_session_id_channel_prayer_name_prayer_date_devi" RENAME TO "reminder_cycles_session_id_channel_prayer_name_prayer_date__key";

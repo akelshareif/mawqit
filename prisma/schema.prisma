@@ -1,0 +1,177 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum SessionStatus {
+  active
+  expired
+}
+
+enum ReminderChannel {
+  email
+  sms
+  calendar
+  browser
+}
+
+enum MessageDirection {
+  outbound
+  inbound
+}
+
+enum MessageDeliveryStatus {
+  sent
+  failed
+}
+
+enum CronRunStatus {
+  running
+  success
+  error
+}
+
+/// Anonymous session (shareable link credential).
+model Session {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  latitude  Float?
+  longitude Float?
+  timezone  String? @db.VarChar(128)
+
+  emailEnabled                Boolean @default(false) @map("email_enabled")
+  emailAddress                String? @map("email_address") @db.VarChar(320)
+  smsEnabled                  Boolean @default(false) @map("sms_enabled")
+  phoneNumber                 String? @map("phone_number") @db.VarChar(32)
+  browserNotificationsEnabled Boolean @default(false) @map("browser_notifications_enabled")
+
+  persistentReminders       Boolean @default(true) @map("persistent_reminders")
+  persistenceCadenceMinutes Int     @default(15) @map("persistence_cadence_minutes")
+  followupEnabled           Boolean @default(false) @map("followup_enabled")
+  followupDelayMinutes      Int     @default(30) @map("followup_delay_minutes")
+
+  prayerMethod String @default("MuslimWorldLeague") @map("prayer_method") @db.VarChar(64)
+
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz
+  sessionStatus SessionStatus @default(active) @map("session_status")
+
+  expiryWarningSentAt     DateTime? @map("expiry_warning_sent_at") @db.Timestamptz
+  expiryDayReminderSentAt   DateTime? @map("expiry_day_reminder_sent_at") @db.Timestamptz
+
+  pushSubscriptions PushSubscription[]
+  messageLogs       MessageLog[]
+  sentReminders     SentReminder[]
+  channelStatuses   ChannelStatus[]
+  reminderCycles    ReminderCycle[]
+
+  @@map("sessions")
+}
+
+/// Active prayer reminder cycle per channel/device (persistence / ack — slice 7).
+model ReminderCycle {
+  id        String   @id @default(uuid())
+  sessionId String   @map("session_id")
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  channel   ReminderChannel
+  prayerName String  @map("prayer_name") @db.VarChar(32)
+  prayerDate DateTime @map("prayer_date") @db.Date
+  /** Empty string for email/SMS; `push_subscriptions.id` for browser. */
+  deviceKey String  @default("") @map("device_key") @db.VarChar(64)
+
+  ackReceived Boolean @default(false) @map("ack_received")
+  followupSent Boolean @default(false) @map("followup_sent")
+  resendCount Int @default(0) @map("resend_count")
+
+  firstSentAt DateTime? @map("first_sent_at") @db.Timestamptz
+  lastSentAt DateTime? @map("last_sent_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([sessionId, channel, prayerName, prayerDate, deviceKey])
+  @@index([sessionId])
+  @@map("reminder_cycles")
+}
+
+/// Web Push devices (subscribe flow — slice 5).
+model PushSubscription {
+  id        String   @id @default(uuid())
+  sessionId String   @map("session_id")
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique @db.Text
+  p256dh    String   @map("p256dh") @db.Text
+  auth      String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  sentReminders SentReminder[]
+
+  @@index([sessionId])
+  @@map("push_subscriptions")
+}
+
+/// STOP/disconnect per channel (slice 7+ inbound). Synced on save when channels are toggled.
+model ChannelStatus {
+  sessionId  String          @map("session_id")
+  channel    ReminderChannel
+  disabled   Boolean           @default(false)
+  disabledAt DateTime?         @map("disabled_at") @db.Timestamptz
+  session    Session           @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@id([sessionId, channel])
+  @@map("channel_status")
+}
+
+model MessageLog {
+  id        String   @id @default(uuid())
+  sessionId String   @map("session_id")
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  channel   ReminderChannel
+  prayerName String? @map("prayer_name") @db.VarChar(32)
+  type      String   @db.VarChar(64)
+  direction MessageDirection
+  to        String   @db.VarChar(320)
+  body      String?  @db.Text
+  status    MessageDeliveryStatus
+  errorMessage String? @map("error_message") @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([sessionId])
+  @@map("message_log")
+}
+
+model SentReminder {
+  id        String   @id @default(uuid())
+  sessionId String   @map("session_id")
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  prayerName String  @map("prayer_name") @db.VarChar(32)
+  prayerDate DateTime @map("prayer_date") @db.Date
+  channel   ReminderChannel
+  messageType String @map("message_type") @db.VarChar(64)
+  pushSubscriptionId String? @map("push_subscription_id")
+  pushSubscription PushSubscription? @relation(fields: [pushSubscriptionId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([sessionId])
+  @@map("sent_reminders")
+}
+
+model CronRun {
+  id                String        @id @default(uuid())
+  startedAt         DateTime      @default(now()) @map("started_at")
+  completedAt       DateTime?     @map("completed_at") @db.Timestamptz
+  status            CronRunStatus
+  sessionsProcessed Int           @default(0) @map("sessions_processed")
+  messagesSent      Int           @default(0) @map("messages_sent")
+
+  @@map("cron_runs")
+}
