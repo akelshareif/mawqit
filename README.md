@@ -2,6 +2,9 @@
 
 Prayer-time reminders by **email** and **browser (Web Push)**, tied to a **shareable session link** (no separate login). This repo is a [Next.js](https://nextjs.org) (App Router) app with PostgreSQL and Prisma.
 
+It is currently deployed at the following link: https://mawqit-snowy.vercel.app/
+You can [click here](https://mawqit-snowy.vercel.app/) to see Mawqit working live!
+
 ## Requirements
 
 - **Node.js** — recent LTS (see `package.json` for the stack).
