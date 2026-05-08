@@ -1,8 +1,8 @@
 # Mawqit progress
 
-**Last updated:** 2026-05-08 19:30
+**Last updated:** 2026-05-08 20:00
 **Current phase:** Phase 0 — Exploratory pass and cleanup
-**Currently working on:** 0.3 complete; 0.4 Inbound and channel logic is next
+**Currently working on:** 0.4 complete; 0.5 Test coverage map is next
 **Blocked:** none
 
 ## Phase 0 — Exploratory pass and cleanup
@@ -10,7 +10,7 @@
 - [x] 0.1 Repository orientation
 - [x] 0.2 Schema audit
 - [x] 0.3 Reminder pipeline trace
-- [ ] 0.4 Inbound and channel logic
+- [x] 0.4 Inbound and channel logic
 - [ ] 0.5 Test coverage map
 - [ ] 0.6 Environment and deployment
 - [ ] 0.7 Repo cleanup
@@ -47,6 +47,15 @@
 - [ ] 3.6 Masjid outreach kit
 
 ## Recent activity
+
+2026-05-08 — Section 0.4 complete. Wrote docs/context/inbound.md documenting
+              handleInbound's 8 outcomes (invalid_address, no_session, stop, help,
+              empty, no_timezone, no_active_cycle, ack), STOP/HELP/generic-ack flows,
+              channel-status's three-state row model (no row / disabled=false /
+              disabled=true), and the dual-writer pattern (syncChannelStatuses on
+              save vs handleInbound on STOP). 9 items flagged. Also corrected
+              pipeline.md flag #9: PATCH /api/sessions DOES reset expiry*SentAt
+              columns on save (initial mis-read).
 
 2026-05-08 — Section 0.3 complete. Wrote docs/context/pipeline.md tracing the cron
               entry point, the four-pass execution order (expiry → email → browser →
