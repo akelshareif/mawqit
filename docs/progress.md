@@ -1,15 +1,15 @@
 # Mawqit progress
 
-**Last updated:** 2026-05-08 19:00
+**Last updated:** 2026-05-08 19:30
 **Current phase:** Phase 0 — Exploratory pass and cleanup
-**Currently working on:** 0.2 complete; 0.3 Reminder pipeline trace is next
+**Currently working on:** 0.3 complete; 0.4 Inbound and channel logic is next
 **Blocked:** none
 
 ## Phase 0 — Exploratory pass and cleanup
 
 - [x] 0.1 Repository orientation
 - [x] 0.2 Schema audit
-- [ ] 0.3 Reminder pipeline trace
+- [x] 0.3 Reminder pipeline trace
 - [ ] 0.4 Inbound and channel logic
 - [ ] 0.5 Test coverage map
 - [ ] 0.6 Environment and deployment
@@ -47,6 +47,15 @@
 - [ ] 3.6 Masjid outreach kit
 
 ## Recent activity
+
+2026-05-08 — Section 0.3 complete. Wrote docs/context/pipeline.md tracing the cron
+              entry point, the four-pass execution order (expiry → email → browser →
+              persistence), the dual-clock model (realNow vs reminderNow), the
+              claim-then-send ledger pattern with rollback-on-failure, the cycle table
+              for follow-ups and resends, the 410/404 push cleanup path, and a full
+              inventory of mock-mode env switches. 10 items flagged for "things to
+              revisit," most prominent: there is no initial-pass for SMS so
+              run-persistence-pass's SMS branch is unreachable until Phase 3.
 
 2026-05-08 — Section 0.2 complete. Wrote docs/context/schema.md covering all 7 models,
               5 enums, cascade rules, the two partial unique indexes that enforce
