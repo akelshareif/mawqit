@@ -1,14 +1,14 @@
 # Mawqit progress
 
-**Last updated:** 2026-05-08 18:00
+**Last updated:** 2026-05-08 19:00
 **Current phase:** Phase 0 — Exploratory pass and cleanup
-**Currently working on:** 0.1 Repository orientation — producing docs/context/repo-map.md
+**Currently working on:** 0.2 complete; 0.3 Reminder pipeline trace is next
 **Blocked:** none
 
 ## Phase 0 — Exploratory pass and cleanup
 
 - [x] 0.1 Repository orientation
-- [ ] 0.2 Schema audit
+- [x] 0.2 Schema audit
 - [ ] 0.3 Reminder pipeline trace
 - [ ] 0.4 Inbound and channel logic
 - [ ] 0.5 Test coverage map
@@ -48,6 +48,13 @@
 
 ## Recent activity
 
+2026-05-08 — Section 0.2 complete. Wrote docs/context/schema.md covering all 7 models,
+              5 enums, cascade rules, the two partial unique indexes that enforce
+              send-ledger idempotency, single-value fields earmarked for 1:N migration
+              in Phase 1.4, and the 6 existing migrations. Owner resolved 3 open
+              questions: Vercel managed via dashboard, soft-delete on payment rows,
+              rename lib/utils.ts in 0.7. /resend webhooks dir remains open.
+
 2026-05-08 — Phase 0 kickoff. Read CLAUDE.md, claude-code-instructions.md, PLAN.md.
               Wrote initial progress.md and docs/context/repo-map.md (section 0.1 complete).
 
@@ -57,6 +64,10 @@
 
 ## Open questions for the project owner
 
-- Soft-delete vs hard-delete for subscriptions and donations rows when a session is deleted via the existing delete-my-data flow. Current schema cascade-deletes everything; production may need to retain payment records for tax and chargeback purposes. Resolve before Phase 1.4 (schema migration).
-- `src/lib/utils.ts` exists and exports the standard shadcn `cn()` helper, used by 7 components. CLAUDE.md forbids `utils.ts` filenames. Options for 0.7 cleanup: rename to `src/lib/class-names.ts` (or similar) and update imports, or carve out an explicit exception for shadcn-generated `cn`. No action this session — flagging for cleanup-pass discussion.
-- `src/app/api/webhooks/resend/` directory exists but is empty. Confirm this is an intentional placeholder for the Phase 1.2 Resend inbound webhook and should remain as-is, vs. removed in 0.7 cleanup until the route is actually written.
+- `src/app/api/webhooks/resend/` directory exists but is empty. Project owner is unsure of intent. Default plan: leave it untouched in 0.7 (do not remove, do not write a route into it) and revisit at the start of Phase 1.2 when the real inbound webhook is wired. If the project owner reaches a decision earlier, log it here.
+
+## Resolved decisions
+
+- **Vercel project config:** managed entirely through the Vercel dashboard. No `vercel.json` expected in repo. (2026-05-08)
+- **Cascade-delete on session deletion:** soft-delete `subscriptions` and `donations` rows so payment records survive for tax and chargeback purposes. To be implemented in Phase 1.4 schema migration. (2026-05-08)
+- **`src/lib/utils.ts` rename:** rename in the 0.7 cleanup pass and update the 7 importers. (2026-05-08)
