@@ -1,8 +1,8 @@
 # Mawqit progress
 
-**Last updated:** 2026-05-08 20:00
+**Last updated:** 2026-05-08 20:30
 **Current phase:** Phase 0 — Exploratory pass and cleanup
-**Currently working on:** 0.4 complete; 0.5 Test coverage map is next
+**Currently working on:** 0.5 complete; 0.6 Environment and deployment is next
 **Blocked:** none
 
 ## Phase 0 — Exploratory pass and cleanup
@@ -11,7 +11,7 @@
 - [x] 0.2 Schema audit
 - [x] 0.3 Reminder pipeline trace
 - [x] 0.4 Inbound and channel logic
-- [ ] 0.5 Test coverage map
+- [x] 0.5 Test coverage map
 - [ ] 0.6 Environment and deployment
 - [ ] 0.7 Repo cleanup
 - [ ] 0.8 Outputs of Phase 0 written
@@ -47,6 +47,17 @@
 - [ ] 3.6 Masjid outreach kit
 
 ## Recent activity
+
+2026-05-08 — Section 0.5 complete. npm test passes 107/107 across 38 files. Wrote
+              docs/context/tests.md mapping every source file to its test file (or
+              lack thereof). Cron-pass tests are token smoke tests only (each asserts
+              empty-input → zero-output); the claim-then-send ledger flow,
+              rollback-on-failure, and 410/404 push cleanup are all untested. PLAN.md
+              §1.3 gaps confirmed: Asr juristic, DST, and high-latitude rules are
+              completely uncovered, premium gating doesn't exist yet. Discovered
+              setup-payload hard-codes smsEnabled=false / phoneNumber=null on every
+              save — SMS is structurally dormant. No GitHub Actions workflows in
+              repo. Corrected inbound.md flag #2: stored emails ARE normalized.
 
 2026-05-08 — Section 0.4 complete. Wrote docs/context/inbound.md documenting
               handleInbound's 8 outcomes (invalid_address, no_session, stop, help,
