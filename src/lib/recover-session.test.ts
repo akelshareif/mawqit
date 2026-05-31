@@ -21,7 +21,11 @@ describe("findSessionForRecovery", () => {
     const prisma = { session: { findFirst } } as never;
     await findSessionForRecovery(prisma, "sms", "+15551234567");
     expect(findFirst).toHaveBeenCalledWith({
-      where: { phoneNumber: "+15551234567" },
+      where: {
+        recipients: {
+          some: { type: "sms", value: "+15551234567", isPrimary: true },
+        },
+      },
       orderBy: { updatedAt: "desc" },
     });
   });

@@ -24,6 +24,17 @@ import {
 import { labelForKey } from "@/lib/reminders/prayer-reminder-common";
 import { tryCreateSentReminder } from "@/lib/reminders/sent-reminder";
 import type { CronReminderClocks } from "@/lib/reminders/cron-clocks";
+import { activeLocation, primaryRecipientValue } from "@/lib/session-targets";
+import type { RecipientType } from "@/generated/prisma/enums";
+
+type PersistenceSession = {
+  id: string;
+  emailEnabled: boolean;
+  smsEnabled: boolean;
+  browserNotificationsEnabled: boolean;
+  savedLocations: { latitude: number; longitude: number; timezone: string }[];
+  recipients: { type: RecipientType; value: string; isPrimary: boolean }[];
+};
 
 export async function runPersistencePass(
   prisma: PrismaClient,
@@ -38,7 +49,14 @@ export async function runPersistencePass(
         expiresAt: { gt: realNow },
       },
     },
-    include: { session: true },
+    include: {
+      session: {
+        include: {
+          savedLocations: { where: { isActive: true }, take: 1 },
+          recipients: { where: { isPrimary: true } },
+        },
+      },
+    },
   });
 
   const email = createEmailProvider(prisma);
@@ -50,15 +68,23 @@ export async function runPersistencePass(
 
   for (const cycle of cycles) {
     const session = cycle.session;
-    if (
-      session.latitude == null ||
-      session.longitude == null ||
-      !session.timezone
-    ) {
+    const loc = activeLocation(session.savedLocations);
+    if (!loc) {
       continue;
     }
 
-    if (isReminderCycleStale(session, cycle, reminderNow)) {
+    if (
+      isReminderCycleStale(
+        {
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          timezone: loc.timezone,
+          prayerMethod: session.prayerMethod,
+        },
+        cycle,
+        reminderNow,
+      )
+    ) {
       continue;
     }
 
@@ -74,7 +100,7 @@ export async function runPersistencePass(
       continue;
     }
 
-    const tz = session.timezone;
+    const tz = loc.timezone;
     const ymd = formatDateInTimeZone(reminderNow, tz);
     const prayerDate = parseUtcDateFromYmd(ymd);
     if (cycle.prayerDate.getTime() !== prayerDate.getTime()) {
@@ -155,15 +181,7 @@ async function sendFollowupForChannel(args: {
     prayerName: string;
     deviceKey: string;
   };
-  session: {
-    id: string;
-    emailEnabled: boolean;
-    emailAddress: string | null;
-    smsEnabled: boolean;
-    phoneNumber: string | null;
-    browserNotificationsEnabled: boolean;
-    timezone: string | null;
-  };
+  session: PersistenceSession;
   channel: ReminderChannel;
   prayerDate: Date;
   label: string;
@@ -187,6 +205,10 @@ async function sendFollowupForChannel(args: {
     now,
   } = args;
 
+  const emailAddress = primaryRecipientValue(session.recipients, "email");
+  const phoneNumber = primaryRecipientValue(session.recipients, "sms");
+  const timezone = activeLocation(session.savedLocations)?.timezone ?? null;
+
   const pushSubscriptionId =
     channel === ReminderChannel.browser ? cycle.deviceKey || null : null;
 
@@ -207,11 +229,11 @@ async function sendFollowupForChannel(args: {
   const body = `We have not heard from you about ${label} yet. Open your session if you still need the times: ${openUrl}`;
 
   if (channel === ReminderChannel.email) {
-    if (!session.emailEnabled || !session.emailAddress) {
+    if (!session.emailEnabled || !emailAddress) {
       await prisma.sentReminder.delete({ where: { id: claimed.id } });
       return false;
     }
-    const result = await email.send(session.emailAddress, subject, body, {
+    const result = await email.send(emailAddress, subject, body, {
       sessionId: session.id,
       prayerName: cycle.prayerName,
       messageLogType: MESSAGE_TYPE.followup,
@@ -229,11 +251,11 @@ async function sendFollowupForChannel(args: {
   }
 
   if (channel === ReminderChannel.sms) {
-    if (!session.smsEnabled || !session.phoneNumber) {
+    if (!session.smsEnabled || !phoneNumber) {
       await prisma.sentReminder.delete({ where: { id: claimed.id } });
       return false;
     }
-    const result = await sms.send(session.phoneNumber, body, {
+    const result = await sms.send(phoneNumber, body, {
       sessionId: session.id,
       prayerName: cycle.prayerName,
       messageLogType: MESSAGE_TYPE.followup,
@@ -250,7 +272,7 @@ async function sendFollowupForChannel(args: {
   }
 
   if (channel === ReminderChannel.browser) {
-    if (!session.browserNotificationsEnabled || !cycle.deviceKey) {
+    if (!session.browserNotificationsEnabled || !cycle.deviceKey || !timezone) {
       await prisma.sentReminder.delete({ where: { id: claimed.id } });
       return false;
     }
@@ -261,7 +283,7 @@ async function sendFollowupForChannel(args: {
       await prisma.sentReminder.delete({ where: { id: claimed.id } });
       return false;
     }
-    const ymd = formatDateInTimeZone(now, session.timezone!);
+    const ymd = formatDateInTimeZone(now, timezone);
     const result = await push.sendPrayerReminder(
       {
         id: sub.id,
@@ -324,15 +346,7 @@ async function sendResendForChannel(args: {
     prayerName: string;
     deviceKey: string;
   };
-  session: {
-    id: string;
-    emailEnabled: boolean;
-    emailAddress: string | null;
-    smsEnabled: boolean;
-    phoneNumber: string | null;
-    browserNotificationsEnabled: boolean;
-    timezone: string | null;
-  };
+  session: PersistenceSession;
   channel: ReminderChannel;
   prayerDate: Date;
   label: string;
@@ -356,6 +370,10 @@ async function sendResendForChannel(args: {
     now,
   } = args;
 
+  const emailAddress = primaryRecipientValue(session.recipients, "email");
+  const phoneNumber = primaryRecipientValue(session.recipients, "sms");
+  const timezone = activeLocation(session.savedLocations)?.timezone ?? null;
+
   const pushSubscriptionId =
     channel === ReminderChannel.browser ? cycle.deviceKey || null : null;
 
@@ -375,11 +393,11 @@ async function sendResendForChannel(args: {
   const body = `Still time for ${label}. Open your session: ${openUrl}`;
 
   if (channel === ReminderChannel.email) {
-    if (!session.emailEnabled || !session.emailAddress) {
+    if (!session.emailEnabled || !emailAddress) {
       await prisma.sentReminder.delete({ where: { id: claimed.id } });
       return false;
     }
-    const result = await email.send(session.emailAddress, subject, body, {
+    const result = await email.send(emailAddress, subject, body, {
       sessionId: session.id,
       prayerName: cycle.prayerName,
       messageLogType: MESSAGE_TYPE.persistenceResend,
@@ -397,11 +415,11 @@ async function sendResendForChannel(args: {
   }
 
   if (channel === ReminderChannel.sms) {
-    if (!session.smsEnabled || !session.phoneNumber) {
+    if (!session.smsEnabled || !phoneNumber) {
       await prisma.sentReminder.delete({ where: { id: claimed.id } });
       return false;
     }
-    const result = await sms.send(session.phoneNumber, body, {
+    const result = await sms.send(phoneNumber, body, {
       sessionId: session.id,
       prayerName: cycle.prayerName,
       messageLogType: MESSAGE_TYPE.persistenceResend,
@@ -415,7 +433,7 @@ async function sendResendForChannel(args: {
   }
 
   if (channel === ReminderChannel.browser) {
-    if (!session.browserNotificationsEnabled || !cycle.deviceKey) {
+    if (!session.browserNotificationsEnabled || !cycle.deviceKey || !timezone) {
       await prisma.sentReminder.delete({ where: { id: claimed.id } });
       return false;
     }
@@ -426,7 +444,7 @@ async function sendResendForChannel(args: {
       await prisma.sentReminder.delete({ where: { id: claimed.id } });
       return false;
     }
-    const ymd = formatDateInTimeZone(now, session.timezone!);
+    const ymd = formatDateInTimeZone(now, timezone);
     const result = await push.sendPrayerReminder(
       {
         id: sub.id,
