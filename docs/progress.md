@@ -1,8 +1,8 @@
 # Mawqit progress
 
-**Last updated:** 2026-05-08 20:30
+**Last updated:** 2026-05-31 00:00
 **Current phase:** Phase 0 — Exploratory pass and cleanup
-**Currently working on:** 0.5 complete; 0.6 Environment and deployment is next
+**Currently working on:** 0.6 complete; 0.7 Repo cleanup is next
 **Blocked:** none
 
 ## Phase 0 — Exploratory pass and cleanup
@@ -12,7 +12,7 @@
 - [x] 0.3 Reminder pipeline trace
 - [x] 0.4 Inbound and channel logic
 - [x] 0.5 Test coverage map
-- [ ] 0.6 Environment and deployment
+- [x] 0.6 Environment and deployment
 - [ ] 0.7 Repo cleanup
 - [ ] 0.8 Outputs of Phase 0 written
 
@@ -47,6 +47,15 @@
 - [ ] 3.6 Masjid outreach kit
 
 ## Recent activity
+
+2026-05-31 — Section 0.6 complete. Wrote docs/context/env.md documenting all 16 env
+              vars (15 in app code + DIRECT_URL via Prisma schema), the mock-mode
+              switches, and the deployment setup (Vercel dashboard-managed, Node 20,
+              external cron driver, no CI in repo). Flagged 6 items: no .env.example
+              despite docs referencing it, admin middleware fails open when
+              ADMIN_PASSWORD unset, web-push.ts dead mode2/resolvePushMode2 (0.7),
+              debug route's misnamed debugSecret (0.7), email-vs-push mock-fallback
+              asymmetry, and absent CI automation.
 
 2026-05-08 — Section 0.5 complete. npm test passes 107/107 across 38 files. Wrote
               docs/context/tests.md mapping every source file to its test file (or
