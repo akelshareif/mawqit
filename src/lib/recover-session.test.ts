@@ -11,7 +11,11 @@ describe("findSessionForRecovery", () => {
     const prisma = { session: { findFirst } } as never;
     await findSessionForRecovery(prisma, "email", "a@example.com");
     expect(findFirst).toHaveBeenCalledWith({
-      where: { emailAddress: "a@example.com" },
+      where: {
+        recipients: {
+          some: { type: "email", value: "a@example.com", isPrimary: true },
+        },
+      },
       orderBy: { updatedAt: "desc" },
     });
   });

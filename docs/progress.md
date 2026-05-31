@@ -55,9 +55,10 @@
               half-converted. Completed it: email-reminders import, persistence/expiry
               relational reads, session-has-location helper, and the inbound / recover /
               session-has-location test fixtures. Verified one command at a time: tsc 0,
-              lint 0, tests 107/107 (the real baseline — earlier "112" was wrong),
-              build 0. Send-ledger untouched. Migration still NOT applied to DB (Neon
-              was offline); owner runs `prisma migrate dev` when it's up.
+              lint 0, tests 108/108 (was 107 on main; +1 from a new session-has-location
+              case — earlier "112" was a wrong figure), build 0. Send-ledger untouched.
+              Migration still NOT applied to DB (Neon was offline); owner runs
+              `prisma migrate dev` when it's up.
 
 2026-05-31 — Phase 0 fully complete (0.1–0.8). Confirmed all seven docs/context/*.md
               outputs exist and match the codebase: repo-map, schema, pipeline, inbound,
