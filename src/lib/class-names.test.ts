@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cn } from "./utils";
+import { cn } from "./class-names";
 
 describe("cn", () => {
   it("merges class names", () => {

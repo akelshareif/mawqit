@@ -1,6 +1,6 @@
 import type { NextPrayerInfo, PrayerClockRow } from "@/lib/prayer-times";
 import { formatClockInTimeZone } from "@/lib/prayer-times";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/class-names";
 
 type Props = {
   timeZone: string;
