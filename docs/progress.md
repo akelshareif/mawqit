@@ -48,14 +48,15 @@
 
 ## Recent activity
 
-2026-05-31 — Section 0.6 complete. Wrote docs/context/env.md documenting all 16 env
-              vars (15 in app code + DIRECT_URL via Prisma schema), the mock-mode
-              switches, and the deployment setup (Vercel dashboard-managed, Node 20,
-              external cron driver, no CI in repo). Flagged 6 items: no .env.example
-              despite docs referencing it, admin middleware fails open when
-              ADMIN_PASSWORD unset, web-push.ts dead mode2/resolvePushMode2 (0.7),
-              debug route's misnamed debugSecret (0.7), email-vs-push mock-fallback
-              asymmetry, and absent CI automation.
+2026-05-31 — Section 0.6 complete. Wrote docs/context/env.md documenting all 21 env
+              vars read by code (centralized in src/lib/env.ts), the mock-mode
+              switches, and deployment (Vercel dashboard-managed, external cron driver,
+              no CI, no pinned Node). Reconciled .env.example/README vs code: stale
+              BASE_URL (remove in 0.7), and ADMIN_*/PLAUSIBLE_* declared but
+              unimplemented (Phase 1.5 / 3.4). Flagged push-vs-email mock-fallback
+              asymmetry and absent CI. NOTE: first env.md draft was committed with
+              fabricated details (invented DIRECT_URL, a fail-open middleware, claimed
+              no .env.example); corrected after verifying against real source.
 
 2026-05-08 — Section 0.5 complete. npm test passes 107/107 across 38 files. Wrote
               docs/context/tests.md mapping every source file to its test file (or
