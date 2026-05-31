@@ -1,8 +1,8 @@
 # Mawqit progress
 
-**Last updated:** 2026-05-31 16:15
+**Last updated:** 2026-05-31 16:25
 **Current phase:** Phase 0 — Exploratory pass and cleanup
-**Currently working on:** 0.7 complete, PR opened for review; 0.8 outputs + acceptance-gate review is next
+**Currently working on:** 0.7 complete, PR #1 open for review; 0.8 outputs + acceptance-gate review is next
 **Blocked:** none
 
 ## Phase 0 — Exploratory pass and cleanup
@@ -48,8 +48,15 @@
 
 ## Recent activity
 
+2026-05-31 — Opened PR #1 (`chore: phase 0 cleanup`) → main. Local main had 9 unpushed
+              Phase 0 docs commits while origin/main had a README deploy-link commit;
+              reconciled by merging origin/main into the branch (README excluded from the
+              PR diff). Per owner decision, the whole Phase 0 output (7 context docs +
+              progress trail + cleanup) ships in this one PR rather than pushing docs to
+              main directly. PR is mergeable; awaiting review (acceptance gate).
+
 2026-05-31 — Section 0.7 complete. Behavior-preserving cleanup on branch
-              chore/phase-0-cleanup, shipped as PR `chore: phase 0 cleanup`. Renamed
+              chore/phase-0-cleanup. Renamed
               src/lib/utils.ts → class-names.ts (resolved decision; updated 7 importers,
               test, components.json alias), deleted 5 unused create-next-app SVGs (kept
               sw.js), removed stale BASE_URL from .env.example. No dep changes (depcheck
