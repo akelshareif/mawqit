@@ -1,5 +1,9 @@
 # Mawqit progress
 
+**Last updated:** 2026-05-31 19:00
+**Current phase:** Phase 1 — Production hardening
+**Currently working on:** 1.4 schema migration — code complete on feat/phase-1.4-schema (PR #3). Migration NOT yet applied to the Neon DB (it was offline). Phase 0 merged (PR #1); Phase 0 summary in PR #2 (separate branch).
+**Blocked:** Neon DB unreachable this session — `prisma migrate dev` couldn't run. Migration file authored offline + committed; owner needs to apply it once the DB is up.
 **Last updated:** 2026-05-31 17:00
 **Current phase:** Phase 0 complete (gate passed) → Phase 1 next
 **Currently working on:** Phase 0 done: PR #1 merged to main (7266f6e), acceptance gate passed, phase summary written at docs/phases/phase_0_summary.md. Next: Phase 1.4 (schema migration) per PLAN execution order.
@@ -21,7 +25,7 @@
 - [ ] 1.1 Domain and email infrastructure
 - [ ] 1.2 Wire inbound email
 - [ ] 1.3 Prayer-time correctness
-- [ ] 1.4 Schema migration
+- [~] 1.4 Schema migration (code + migration committed; migration not yet applied to DB)
 - [ ] 1.5 Observability
 - [ ] 1.6 Legal and data
 - [ ] 1.7 Rate limiting and abuse hardening
@@ -48,6 +52,17 @@
 
 ## Recent activity
 
+2026-05-31 — Phase 1.4 cutover finished and verified green. The earlier cutover
+              commits on feat/phase-1.4-schema (incl. 0478a86, whose message wrongly
+              claimed green) actually still had 5 tsc errors and failing tests — a
+              botched in-place edit left the email/expiry/persistence passes and pages
+              half-converted. Completed it: email-reminders import, persistence/expiry
+              relational reads, session-has-location helper, and the inbound / recover /
+              session-has-location test fixtures. Verified one command at a time: tsc 0,
+              lint 0, tests 108/108 (was 107 on main; +1 from a new session-has-location
+              case — earlier "112" was a wrong figure), build 0. Send-ledger untouched.
+              Migration still NOT applied to DB (Neon was offline); owner runs
+              `prisma migrate dev` when it's up.
 2026-05-31 — Phase 0 complete & gate passed. PR #1 merged to main as 7266f6e. Wrote the
               phase summary at docs/phases/phase_0_summary.md (what was built, concepts,
               rationale, verification steps, Phase 1 heads-up). Recovered a local-main
@@ -126,7 +141,13 @@
 
 ## Blockers
 
-(empty)
+- **Neon DB unreachable (2026-05-31).** During Phase 1.4 the database returned
+  `P1001: Can't reach database server`, so `prisma migrate dev` could not run. Worked
+  around it by authoring the migration SQL offline via `prisma migrate diff` (committed
+  at `prisma/migrations/20260531120000_phase_1_4_schema/migration.sql`) and
+  regenerating the client. **To clear:** once the DB is up, run `npm run db:migrate`
+  (or `prisma migrate reset` for a clean slate), then `npx prisma migrate status` to
+  confirm.
 
 ## Open questions for the project owner
 

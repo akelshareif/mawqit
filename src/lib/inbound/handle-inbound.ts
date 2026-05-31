@@ -12,6 +12,7 @@ import { createEmailProvider } from "@/lib/providers/email";
 import { createMockSmsProvider } from "@/lib/providers/sms";
 import { sessionUrl } from "@/lib/public-url";
 import { findLatestOpenCycleForAck } from "@/lib/reminder-cycle";
+import { activeLocation, primaryRecipientValue } from "@/lib/session-targets";
 
 const INBOUND_LOG = "inbound_message";
 const OUTBOUND = {
@@ -45,10 +46,22 @@ export async function handleInbound(
   const session =
     channel === "email"
       ? await prisma.session.findFirst({
-          where: { emailAddress: from },
+          where: {
+            recipients: { some: { type: "email", value: from, isPrimary: true } },
+          },
+          include: {
+            savedLocations: { where: { isActive: true }, take: 1 },
+            recipients: { where: { isPrimary: true } },
+          },
         })
       : await prisma.session.findFirst({
-          where: { phoneNumber: from },
+          where: {
+            recipients: { some: { type: "sms", value: from, isPrimary: true } },
+          },
+          include: {
+            savedLocations: { where: { isActive: true }, take: 1 },
+            recipients: { where: { isPrimary: true } },
+          },
         });
 
   const reminderChannel =
@@ -62,6 +75,9 @@ export async function handleInbound(
   }
 
   const sess = session;
+  const loc = activeLocation(sess.savedLocations);
+  const emailAddress = primaryRecipientValue(sess.recipients, "email");
+  const phoneNumber = primaryRecipientValue(sess.recipients, "sms");
 
   await prisma.messageLog.create({
     data: {
@@ -79,15 +95,15 @@ export async function handleInbound(
   const sms = createMockSmsProvider(prisma);
 
   async function sendOutbound(text: string, messageLogType: string): Promise<void> {
-    if (channel === "email" && sess.emailAddress) {
+    if (channel === "email" && emailAddress) {
       await email.send(
-        sess.emailAddress,
+        emailAddress,
         "Mawqit",
         text,
         { sessionId: sess.id, messageLogType },
       );
-    } else if (channel === "sms" && sess.phoneNumber) {
-      await sms.send(sess.phoneNumber, text, {
+    } else if (channel === "sms" && phoneNumber) {
+      await sms.send(phoneNumber, text, {
         sessionId: sess.id,
         messageLogType,
       });
@@ -148,7 +164,7 @@ export async function handleInbound(
     return { outcome: "empty" };
   }
 
-  const tz = sess.timezone;
+  const tz = loc?.timezone ?? null;
   if (!tz) {
     logger.info("inbound", "Inbound: ack skipped (no timezone)", {
       sessionIdPrefix: sess.id.slice(0, 8),
@@ -165,9 +181,9 @@ export async function handleInbound(
     prayerDate,
     now: new Date(),
     session: {
-      latitude: sess.latitude,
-      longitude: sess.longitude,
-      timezone: sess.timezone,
+      latitude: loc?.latitude ?? null,
+      longitude: loc?.longitude ?? null,
+      timezone: loc?.timezone ?? null,
       prayerMethod: sess.prayerMethod,
     },
   });

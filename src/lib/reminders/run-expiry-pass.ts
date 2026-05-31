@@ -13,13 +13,7 @@ import {
 } from "@/lib/providers/email";
 import { createWebPushProvider } from "@/lib/providers/web-push";
 import { sessionUrl } from "@/lib/public-url";
-
-function wantsEmail(session: {
-  emailEnabled: boolean;
-  emailAddress: string | null;
-}): session is typeof session & { emailAddress: string } {
-  return Boolean(session.emailEnabled && session.emailAddress);
-}
+import { activeLocation, primaryRecipientValue } from "@/lib/session-targets";
 
 export async function runExpiryPass(
   prisma: PrismaClient,
@@ -44,7 +38,11 @@ export async function runExpiryPass(
     where: {
       sessionStatus: SessionStatus.active,
       expiresAt: { not: null, gt: realNow },
-      timezone: { not: null },
+      savedLocations: { some: { isActive: true } },
+    },
+    include: {
+      savedLocations: { where: { isActive: true }, take: 1 },
+      recipients: { where: { isPrimary: true } },
     },
   });
 
@@ -54,7 +52,12 @@ export async function runExpiryPass(
   let messagesSent = 0;
 
   for (const session of sessions) {
-    const tz = session.timezone!;
+    const loc = activeLocation(session.savedLocations);
+    if (!loc) {
+      continue;
+    }
+    const tz = loc.timezone;
+    const emailAddress = primaryRecipientValue(session.recipients, "email");
     const exp = session.expiresAt!;
     const link = sessionUrl(session.id);
 
@@ -93,6 +96,7 @@ export async function runExpiryPass(
         email,
         webPush,
         session,
+        emailAddress,
         session.id,
         link,
         tz,
@@ -109,6 +113,7 @@ export async function runExpiryPass(
         email,
         webPush,
         session,
+        emailAddress,
         session.id,
         link,
         tz,
@@ -122,16 +127,17 @@ export async function runExpiryPass(
   return { sessionsProcessed: sessions.length, messagesSent };
 }
 
+type ExpirySession = {
+  emailEnabled: boolean;
+  browserNotificationsEnabled: boolean;
+};
+
 async function sendExpiryWarning(
   prisma: PrismaClient,
   email: EmailProvider,
   webPush: ReturnType<typeof createWebPushProvider>,
-  session: {
-    id: string;
-    emailEnabled: boolean;
-    emailAddress: string | null;
-    browserNotificationsEnabled: boolean;
-  },
+  session: ExpirySession,
+  emailAddress: string | null,
   sessionId: string,
   link: string,
   tz: string,
@@ -144,8 +150,8 @@ async function sendExpiryWarning(
   let count = 0;
   let anyChannelOk = false;
 
-  if (wantsEmail(session) && !emailChannelDisabled) {
-    const r = await email.send(session.emailAddress!, subject, body, {
+  if (session.emailEnabled && emailAddress && !emailChannelDisabled) {
+    const r = await email.send(emailAddress, subject, body, {
       sessionId,
       messageLogType: MESSAGE_TYPE.sessionExpiryWarning,
     });
@@ -201,12 +207,8 @@ async function sendExpiryDay(
   prisma: PrismaClient,
   email: EmailProvider,
   webPush: ReturnType<typeof createWebPushProvider>,
-  session: {
-    id: string;
-    emailEnabled: boolean;
-    emailAddress: string | null;
-    browserNotificationsEnabled: boolean;
-  },
+  session: ExpirySession,
+  emailAddress: string | null,
   sessionId: string,
   link: string,
   tz: string,
@@ -219,8 +221,8 @@ async function sendExpiryDay(
   let count = 0;
   let anyChannelOk = false;
 
-  if (wantsEmail(session) && !emailChannelDisabled) {
-    const r = await email.send(session.emailAddress!, subject, body, {
+  if (session.emailEnabled && emailAddress && !emailChannelDisabled) {
+    const r = await email.send(emailAddress, subject, body, {
       sessionId,
       messageLogType: MESSAGE_TYPE.sessionExpiryDay,
     });

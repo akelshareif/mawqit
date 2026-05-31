@@ -3,12 +3,13 @@ import { handleInbound } from "./handle-inbound";
 
 const sessionEmail = {
   id: "550e8400-e29b-41d4-a716-446655440000",
-  emailAddress: "user@example.com",
-  phoneNumber: null as string | null,
-  timezone: "UTC",
-  latitude: 0,
-  longitude: 0,
   prayerMethod: "MuslimWorldLeague",
+  savedLocations: [
+    { latitude: 0, longitude: 0, timezone: "UTC", isActive: true },
+  ],
+  recipients: [
+    { type: "email" as const, value: "user@example.com", isPrimary: true },
+  ],
 };
 
 function mockPrisma() {

@@ -8,6 +8,7 @@ import { createWebPushProvider } from "@/lib/providers/web-push";
 import { rateLimitOr429 } from "@/lib/rate-limit-api";
 import { sessionUrl } from "@/lib/public-url";
 import { isSessionIdFormat } from "@/lib/session-id";
+import { activeLocation, primaryRecipientValue } from "@/lib/session-targets";
 import { NextResponse } from "next/server";
 
 const DEBUG_TYPE = "debug_simulate_send";
@@ -55,13 +56,20 @@ export async function POST(req: Request, ctx: RouteCtx) {
   const prisma = getPrisma();
   const session = await prisma.session.findUnique({
     where: { id: sessionId },
+    include: {
+      savedLocations: { where: { isActive: true }, take: 1 },
+      recipients: { where: { isPrimary: true } },
+    },
   });
   if (!session) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const loc = activeLocation(session.savedLocations);
+  const emailAddress = primaryRecipientValue(session.recipients, "email");
+
   if (channel === "email") {
-    if (!session.emailEnabled || !session.emailAddress) {
+    if (!session.emailEnabled || !emailAddress) {
       return NextResponse.json(
         { error: "Email is not enabled or no address saved." },
         { status: 400 },
@@ -78,7 +86,7 @@ export async function POST(req: Request, ctx: RouteCtx) {
 
     const email = createEmailProvider(prisma);
     const result = await email.send(
-      session.emailAddress,
+      emailAddress,
       emailSubject,
       emailBody,
       {
@@ -116,7 +124,7 @@ export async function POST(req: Request, ctx: RouteCtx) {
     );
   }
 
-  const tz = session.timezone;
+  const tz = loc?.timezone ?? null;
   if (!tz) {
     return NextResponse.json(
       { error: "Session has no timezone." },

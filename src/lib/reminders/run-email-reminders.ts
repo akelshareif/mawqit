@@ -19,6 +19,7 @@ import {
 } from "@/lib/reminders/prayer-reminder-common";
 import { tryCreateSentReminder } from "@/lib/reminders/sent-reminder";
 import type { CronReminderClocks } from "@/lib/reminders/cron-clocks";
+import { activeLocation, primaryRecipientValue } from "@/lib/session-targets";
 
 export async function runEmailReminderPass(
   prisma: PrismaClient,
@@ -30,10 +31,8 @@ export async function runEmailReminderPass(
   const sessions = await prisma.session.findMany({
     where: {
       emailEnabled: true,
-      emailAddress: { not: null },
-      latitude: { not: null },
-      longitude: { not: null },
-      timezone: { not: null },
+      recipients: { some: { type: "email", isPrimary: true } },
+      savedLocations: { some: { isActive: true } },
       sessionStatus: SessionStatus.active,
       expiresAt: { gt: realNow },
       NOT: {
@@ -45,15 +44,23 @@ export async function runEmailReminderPass(
         },
       },
     },
+    include: {
+      savedLocations: { where: { isActive: true }, take: 1 },
+      recipients: { where: { isPrimary: true } },
+    },
   });
 
   let messagesSent = 0;
 
   for (const session of sessions) {
-    const lat = session.latitude!;
-    const lng = session.longitude!;
-    const tz = session.timezone!;
-    const emailTo = session.emailAddress!;
+    const loc = activeLocation(session.savedLocations);
+    const emailTo = primaryRecipientValue(session.recipients, "email");
+    if (!loc || !emailTo) {
+      continue;
+    }
+    const lat = loc.latitude;
+    const lng = loc.longitude;
+    const tz = loc.timezone;
 
     const coords = new Coordinates(lat, lng);
     const params = getCalculationParameters(session.prayerMethod);

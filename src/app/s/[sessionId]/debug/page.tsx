@@ -7,6 +7,7 @@ import {
   isQaReminderClockEnabled,
 } from "@/lib/env";
 import { isSessionIdFormat } from "@/lib/session-id";
+import { activeLocation, primaryRecipientValue } from "@/lib/session-targets";
 import { notFound } from "next/navigation";
 
 type PageProps = { params: Promise<{ sessionId: string }> };
@@ -24,10 +25,17 @@ export default async function SessionDebugPage({ params }: PageProps) {
   const prisma = getPrisma();
   const session = await prisma.session.findUnique({
     where: { id: sessionId },
+    include: {
+      savedLocations: { where: { isActive: true }, take: 1 },
+      recipients: { where: { isPrimary: true } },
+    },
   });
   if (!session) {
     notFound();
   }
+
+  const loc = activeLocation(session.savedLocations);
+  const emailAddress = primaryRecipientValue(session.recipients, "email");
 
   const logs = await prisma.messageLog.findMany({
     where: { sessionId },
@@ -38,21 +46,19 @@ export default async function SessionDebugPage({ params }: PageProps) {
   const pushSubCount = await prisma.pushSubscription.count({
     where: { sessionId },
   });
-  const emailReady = Boolean(
-    session.emailEnabled && session.emailAddress?.trim(),
-  );
+  const emailReady = Boolean(session.emailEnabled && emailAddress?.trim());
   let browserPushBlockedReason: string | null = null;
   if (!session.browserNotificationsEnabled) {
     browserPushBlockedReason =
       "Enable browser notifications in Location & Reminders.";
-  } else if (!session.timezone?.trim()) {
+  } else if (!loc?.timezone?.trim()) {
     browserPushBlockedReason = "Save a location and timezone first.";
   } else if (pushSubCount === 0) {
     browserPushBlockedReason =
       "No push subscription for this session — enable notifications on Home for this device.";
   }
   const browserPushReady = browserPushBlockedReason === null;
-  const inboundReady = Boolean(session.emailAddress?.trim());
+  const inboundReady = Boolean(emailAddress?.trim());
 
   const realNow = new Date();
   const reminderNow = getReminderNow(realNow);
@@ -110,7 +116,7 @@ export default async function SessionDebugPage({ params }: PageProps) {
 
       <DebugSessionTools
         sessionId={sessionId}
-        defaultEmail={session.emailAddress ?? ""}
+        defaultEmail={emailAddress ?? ""}
         emailReady={emailReady}
         browserPushReady={browserPushReady}
         browserPushBlockedReason={browserPushBlockedReason}
