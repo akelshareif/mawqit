@@ -64,27 +64,51 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
 
   try {
     const prisma = getPrisma();
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: {
-        latitude: d.latitude,
-        longitude: d.longitude,
-        timezone: d.timezone,
-        emailEnabled: d.emailEnabled,
-        emailAddress: d.emailAddress,
-        smsEnabled: d.smsEnabled,
-        phoneNumber: d.phoneNumber,
-        browserNotificationsEnabled: d.browserNotificationsEnabled,
-        persistentReminders: d.persistentReminders,
-        persistenceCadenceMinutes: d.persistenceCadenceMinutes,
-        followupEnabled: d.followupEnabled,
-        followupDelayMinutes: d.followupDelayMinutes,
-        prayerMethod: d.prayerMethod,
-        expiresAt,
-        sessionStatus: SessionStatus.active,
-        expiryWarningSentAt: null,
-        expiryDayReminderSentAt: null,
-      },
+    // Phase 1.4: location and contact values live on saved_locations and
+    // notification_recipients. The free tier keeps a single active location and a
+    // single primary recipient per channel, so each save replaces them. Multi-row
+    // (add/remove) semantics arrive with the premium features in Phase 2.5.
+    await prisma.$transaction(async (tx) => {
+      await tx.session.update({
+        where: { id: sessionId },
+        data: {
+          emailEnabled: d.emailEnabled,
+          smsEnabled: d.smsEnabled,
+          browserNotificationsEnabled: d.browserNotificationsEnabled,
+          persistentReminders: d.persistentReminders,
+          persistenceCadenceMinutes: d.persistenceCadenceMinutes,
+          followupEnabled: d.followupEnabled,
+          followupDelayMinutes: d.followupDelayMinutes,
+          prayerMethod: d.prayerMethod,
+          expiresAt,
+          sessionStatus: SessionStatus.active,
+          expiryWarningSentAt: null,
+          expiryDayReminderSentAt: null,
+        },
+      });
+
+      await tx.savedLocation.deleteMany({ where: { sessionId } });
+      await tx.savedLocation.create({
+        data: {
+          sessionId,
+          latitude: d.latitude,
+          longitude: d.longitude,
+          timezone: d.timezone,
+          isActive: true,
+        },
+      });
+
+      await tx.notificationRecipient.deleteMany({ where: { sessionId } });
+      if (d.emailEnabled && d.emailAddress) {
+        await tx.notificationRecipient.create({
+          data: { sessionId, type: "email", value: d.emailAddress, isPrimary: true },
+        });
+      }
+      if (d.smsEnabled && d.phoneNumber) {
+        await tx.notificationRecipient.create({
+          data: { sessionId, type: "sms", value: d.phoneNumber, isPrimary: true },
+        });
+      }
     });
 
     await syncChannelStatuses(prisma, sessionId, {

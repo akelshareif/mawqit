@@ -13,6 +13,7 @@ import { getPrisma } from "@/lib/db";
 import { getDayPrayerRows, getNextPrayer } from "@/lib/prayer-times";
 import { sessionUrl } from "@/lib/public-url";
 import { isSessionIdFormat } from "@/lib/session-id";
+import { activeLocation } from "@/lib/session-targets";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -99,14 +100,16 @@ export default async function DashboardPage({ params }: PageProps) {
 
   const session = await getPrisma().session.findUnique({
     where: { id: sessionId },
+    include: { savedLocations: { where: { isActive: true }, take: 1 } },
   });
   if (!session) {
     notFound();
   }
 
-  const tzRaw = session.timezone?.trim();
-  const lat = session.latitude;
-  const lng = session.longitude;
+  const loc = activeLocation(session.savedLocations);
+  const tzRaw = loc?.timezone?.trim();
+  const lat = loc?.latitude ?? null;
+  const lng = loc?.longitude ?? null;
   if (lat == null || lng == null || !tzRaw) {
     return (
       <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-12">

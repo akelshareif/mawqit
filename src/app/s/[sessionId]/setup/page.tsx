@@ -2,16 +2,15 @@ import { SetupForm, type SetupFormInitial } from "@/components/setup-form";
 import { getPrisma } from "@/lib/db";
 import { sessionHasSavedLocation } from "@/lib/session-has-location";
 import { isSessionIdFormat } from "@/lib/session-id";
+import { activeLocation, primaryRecipientValue } from "@/lib/session-targets";
 import { notFound } from "next/navigation";
 
 type PageProps = { params: Promise<{ sessionId: string }> };
 
 function toInitial(session: {
-  latitude: number | null;
-  longitude: number | null;
-  timezone: string | null;
+  savedLocations: { latitude: number; longitude: number; timezone: string }[];
+  recipients: { type: "email" | "sms"; value: string; isPrimary: boolean }[];
   emailEnabled: boolean;
-  emailAddress: string | null;
   browserNotificationsEnabled: boolean;
   persistentReminders: boolean;
   persistenceCadenceMinutes: number;
@@ -19,12 +18,13 @@ function toInitial(session: {
   followupDelayMinutes: number;
   prayerMethod: string;
 }): SetupFormInitial {
+  const loc = activeLocation(session.savedLocations);
   return {
-    latitude: session.latitude,
-    longitude: session.longitude,
-    timezone: session.timezone,
+    latitude: loc?.latitude ?? null,
+    longitude: loc?.longitude ?? null,
+    timezone: loc?.timezone ?? null,
     emailEnabled: session.emailEnabled,
-    emailAddress: session.emailAddress,
+    emailAddress: primaryRecipientValue(session.recipients, "email"),
     browserNotificationsEnabled: session.browserNotificationsEnabled,
     persistentReminders: session.persistentReminders,
     persistenceCadenceMinutes: session.persistenceCadenceMinutes,
@@ -43,6 +43,10 @@ export default async function SetupPage({ params }: PageProps) {
   const prisma = getPrisma();
   const session = await prisma.session.findUnique({
     where: { id: sessionId },
+    include: {
+      savedLocations: { where: { isActive: true }, take: 1 },
+      recipients: { where: { isPrimary: true } },
+    },
   });
   if (!session) {
     notFound();

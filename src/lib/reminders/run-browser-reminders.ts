@@ -20,6 +20,7 @@ import {
 } from "@/lib/reminders/prayer-reminder-common";
 import { tryCreateSentReminder } from "@/lib/reminders/sent-reminder";
 import type { CronReminderClocks } from "@/lib/reminders/cron-clocks";
+import { activeLocation } from "@/lib/session-targets";
 
 export async function runBrowserReminderPass(
   prisma: PrismaClient,
@@ -32,9 +33,7 @@ export async function runBrowserReminderPass(
     where: {
       session: {
         browserNotificationsEnabled: true,
-        latitude: { not: null },
-        longitude: { not: null },
-        timezone: { not: null },
+        savedLocations: { some: { isActive: true } },
         sessionStatus: SessionStatus.active,
         expiresAt: { gt: realNow },
         NOT: {
@@ -47,7 +46,11 @@ export async function runBrowserReminderPass(
         },
       },
     },
-    include: { session: true },
+    include: {
+      session: {
+        include: { savedLocations: { where: { isActive: true }, take: 1 } },
+      },
+    },
   });
 
   const distinctSessions = new Set(subscriptions.map((s) => s.sessionId));
@@ -55,9 +58,13 @@ export async function runBrowserReminderPass(
 
   for (const sub of subscriptions) {
     const session = sub.session;
-    const lat = session.latitude!;
-    const lng = session.longitude!;
-    const tz = session.timezone!;
+    const loc = activeLocation(session.savedLocations);
+    if (!loc) {
+      continue;
+    }
+    const lat = loc.latitude;
+    const lng = loc.longitude;
+    const tz = loc.timezone;
 
     const coords = new Coordinates(lat, lng);
     const params = getCalculationParameters(session.prayerMethod);

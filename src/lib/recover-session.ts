@@ -19,8 +19,16 @@ export async function findSessionForRecovery(
   return prisma.session.findFirst({
     where:
       channel === "email"
-        ? { emailAddress: normalizedContact }
-        : { phoneNumber: normalizedContact },
+        ? {
+            recipients: {
+              some: { type: "email", value: normalizedContact, isPrimary: true },
+            },
+          }
+        : {
+            recipients: {
+              some: { type: "sms", value: normalizedContact, isPrimary: true },
+            },
+          },
     orderBy: { updatedAt: "desc" },
   });
 }
