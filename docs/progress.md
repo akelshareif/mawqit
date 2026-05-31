@@ -1,8 +1,8 @@
 # Mawqit progress
 
-**Last updated:** 2026-05-31 00:00
+**Last updated:** 2026-05-31 16:15
 **Current phase:** Phase 0 — Exploratory pass and cleanup
-**Currently working on:** 0.6 complete; 0.7 Repo cleanup is next
+**Currently working on:** 0.7 complete, PR opened for review; 0.8 outputs + acceptance-gate review is next
 **Blocked:** none
 
 ## Phase 0 — Exploratory pass and cleanup
@@ -13,7 +13,7 @@
 - [x] 0.4 Inbound and channel logic
 - [x] 0.5 Test coverage map
 - [x] 0.6 Environment and deployment
-- [ ] 0.7 Repo cleanup
+- [x] 0.7 Repo cleanup
 - [ ] 0.8 Outputs of Phase 0 written
 
 ## Phase 1 — Production hardening
@@ -47,6 +47,15 @@
 - [ ] 3.6 Masjid outreach kit
 
 ## Recent activity
+
+2026-05-31 — Section 0.7 complete. Behavior-preserving cleanup on branch
+              chore/phase-0-cleanup, shipped as PR `chore: phase 0 cleanup`. Renamed
+              src/lib/utils.ts → class-names.ts (resolved decision; updated 7 importers,
+              test, components.json alias), deleted 5 unused create-next-app SVGs (kept
+              sw.js), removed stale BASE_URL from .env.example. No dep changes (depcheck
+              hits all false positives), no dead-export removals (all used). Empty
+              webhooks/resend dir left per open question. Wrote docs/context/cleanup.md.
+              Verified: lint 0, tsc 0, test 107/107, build 0 (with DATABASE_URL set).
 
 2026-05-31 — Section 0.6 complete. Wrote docs/context/env.md documenting all 21 env
               vars read by code (centralized in src/lib/env.ts), the mock-mode
@@ -100,8 +109,6 @@
 ## Blockers
 
 (empty)
-
-## Open questions for the project owner
 
 - `src/app/api/webhooks/resend/` directory exists but is empty. Project owner is unsure of intent. Default plan: leave it untouched in 0.7 (do not remove, do not write a route into it) and revisit at the start of Phase 1.2 when the real inbound webhook is wired. If the project owner reaches a decision earlier, log it here.
 
