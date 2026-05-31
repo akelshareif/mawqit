@@ -48,6 +48,17 @@
 
 ## Recent activity
 
+2026-05-31 — Phase 1.4 cutover finished and verified green. The earlier cutover
+              commits on feat/phase-1.4-schema (incl. 0478a86, whose message wrongly
+              claimed green) actually still had 5 tsc errors and failing tests — a
+              botched in-place edit left the email/expiry/persistence passes and pages
+              half-converted. Completed it: email-reminders import, persistence/expiry
+              relational reads, session-has-location helper, and the inbound / recover /
+              session-has-location test fixtures. Verified one command at a time: tsc 0,
+              lint 0, tests 107/107 (the real baseline — earlier "112" was wrong),
+              build 0. Send-ledger untouched. Migration still NOT applied to DB (Neon
+              was offline); owner runs `prisma migrate dev` when it's up.
+
 2026-05-31 — Phase 0 fully complete (0.1–0.8). Confirmed all seven docs/context/*.md
               outputs exist and match the codebase: repo-map, schema, pipeline, inbound,
               tests, env, cleanup. Ticked 0.7 and 0.8. Only the acceptance gate remains

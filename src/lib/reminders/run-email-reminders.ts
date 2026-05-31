@@ -19,6 +19,7 @@ import {
 } from "@/lib/reminders/prayer-reminder-common";
 import { tryCreateSentReminder } from "@/lib/reminders/sent-reminder";
 import type { CronReminderClocks } from "@/lib/reminders/cron-clocks";
+import { activeLocation, primaryRecipientValue } from "@/lib/session-targets";
 
 export async function runEmailReminderPass(
   prisma: PrismaClient,
