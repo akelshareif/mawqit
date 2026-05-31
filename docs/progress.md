@@ -122,6 +122,8 @@
 
 (empty)
 
+## Open questions for the project owner
+
 - `src/app/api/webhooks/resend/` directory exists but is empty. Project owner is unsure of intent. Default plan: leave it untouched in 0.7 (do not remove, do not write a route into it) and revisit at the start of Phase 1.2 when the real inbound webhook is wired. If the project owner reaches a decision earlier, log it here.
 
 ## Resolved decisions
