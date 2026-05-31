@@ -38,20 +38,31 @@ enum CronRunStatus {
   error
 }
 
+enum RecipientType {
+  email
+  sms
+}
+
+enum SubscriptionTier {
+  monthly
+  quarterly
+  semiannual
+  yearly
+}
+
+enum SubscriptionStatus {
+  active
+  expired
+}
+
 /// Anonymous session (shareable link credential).
 model Session {
   id        String   @id @default(uuid())
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  latitude  Float?
-  longitude Float?
-  timezone  String? @db.VarChar(128)
-
   emailEnabled                Boolean @default(false) @map("email_enabled")
-  emailAddress                String? @map("email_address") @db.VarChar(320)
   smsEnabled                  Boolean @default(false) @map("sms_enabled")
-  phoneNumber                 String? @map("phone_number") @db.VarChar(32)
   browserNotificationsEnabled Boolean @default(false) @map("browser_notifications_enabled")
 
   persistentReminders       Boolean @default(true) @map("persistent_reminders")
@@ -61,38 +72,112 @@ model Session {
 
   prayerMethod String @default("MuslimWorldLeague") @map("prayer_method") @db.VarChar(64)
 
-  expiresAt DateTime? @map("expires_at") @db.Timestamptz
+  expiresAt     DateTime?     @map("expires_at") @db.Timestamptz
   sessionStatus SessionStatus @default(active) @map("session_status")
 
   expiryWarningSentAt     DateTime? @map("expiry_warning_sent_at") @db.Timestamptz
-  expiryDayReminderSentAt   DateTime? @map("expiry_day_reminder_sent_at") @db.Timestamptz
+  expiryDayReminderSentAt DateTime? @map("expiry_day_reminder_sent_at") @db.Timestamptz
 
   pushSubscriptions PushSubscription[]
   messageLogs       MessageLog[]
   sentReminders     SentReminder[]
   channelStatuses   ChannelStatus[]
   reminderCycles    ReminderCycle[]
+  savedLocations    SavedLocation[]
+  recipients        NotificationRecipient[]
+  subscription      Subscription?
 
   @@map("sessions")
 }
 
-/// Active prayer reminder cycle per channel/device (persistence / ack — slice 7).
-model ReminderCycle {
+/// Saved location for a session; the `isActive` row drives prayer-time calculation.
+/// One-to-many so premium can save multiple (free tier keeps a single active row).
+model SavedLocation {
   id        String   @id @default(uuid())
   sessionId String   @map("session_id")
   session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  channel   ReminderChannel
-  prayerName String  @map("prayer_name") @db.VarChar(32)
-  prayerDate DateTime @map("prayer_date") @db.Date
-  /** Empty string for email/SMS; `push_subscriptions.id` for browser. */
-  deviceKey String  @default("") @map("device_key") @db.VarChar(64)
+  name      String?  @db.VarChar(120)
+  latitude  Float
+  longitude Float
+  timezone  String   @db.VarChar(128)
+  isActive  Boolean  @default(false) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  ackReceived Boolean @default(false) @map("ack_received")
+  @@index([sessionId])
+  @@map("saved_locations")
+}
+
+/// Email/SMS recipient for a session; the `isPrimary` row is the default target.
+/// One-to-many so premium can add more (free tier keeps a single primary row).
+model NotificationRecipient {
+  id         String        @id @default(uuid())
+  sessionId  String        @map("session_id")
+  session    Session       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type       RecipientType
+  value      String        @db.VarChar(320)
+  isPrimary  Boolean       @default(false) @map("is_primary")
+  verifiedAt DateTime?     @map("verified_at") @db.Timestamptz
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+
+  @@index([sessionId])
+  @@index([type, value])
+  @@map("notification_recipients")
+}
+
+/// Mawqit+ subscription (one-time payments, affirmative renewal). One-to-one with a
+/// live session via the unique nullable FK. On session deletion the FK is set null so
+/// the payment record survives (tax/chargeback); `stripeCustomerId` is the recovery
+/// anchor. `deletedAt` is a separate soft-delete for refund/chargeback removal.
+model Subscription {
+  id                   String             @id @default(uuid())
+  sessionId            String?            @unique @map("session_id")
+  session              Session?           @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  stripeCustomerId     String             @map("stripe_customer_id")
+  stripeSubscriptionId String?            @map("stripe_subscription_id")
+  tier                 SubscriptionTier
+  status               SubscriptionStatus @default(active)
+  periodEnd            DateTime           @map("period_end") @db.Timestamptz
+  lastRenewedAt        DateTime?          @map("last_renewed_at") @db.Timestamptz
+  deletedAt            DateTime?          @map("deleted_at") @db.Timestamptz
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  @@index([stripeCustomerId])
+  @@map("subscriptions")
+}
+
+/// Donation log (anonymous Stripe Payment Links — no session link). Records only.
+model Donation {
+  id              String   @id @default(uuid())
+  stripeSessionId String   @unique @map("stripe_session_id")
+  amount          Int
+  currency        String   @db.VarChar(3)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("donations")
+}
+
+/// Active prayer reminder cycle per channel/device (persistence / ack — slice 7).
+model ReminderCycle {
+  id         String          @id @default(uuid())
+  sessionId  String          @map("session_id")
+  session    Session         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  channel    ReminderChannel
+  prayerName String          @map("prayer_name") @db.VarChar(32)
+  prayerDate DateTime        @map("prayer_date") @db.Date
+  /**
+   * Empty string for email/SMS; `push_subscriptions.id` for browser.
+   */
+  deviceKey  String          @default("") @map("device_key") @db.VarChar(64)
+
+  ackReceived  Boolean @default(false) @map("ack_received")
   followupSent Boolean @default(false) @map("followup_sent")
-  resendCount Int @default(0) @map("resend_count")
+  resendCount  Int     @default(0) @map("resend_count")
 
   firstSentAt DateTime? @map("first_sent_at") @db.Timestamptz
-  lastSentAt DateTime? @map("last_sent_at") @db.Timestamptz
+  lastSentAt  DateTime? @map("last_sent_at") @db.Timestamptz
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -123,43 +208,43 @@ model PushSubscription {
 model ChannelStatus {
   sessionId  String          @map("session_id")
   channel    ReminderChannel
-  disabled   Boolean           @default(false)
-  disabledAt DateTime?         @map("disabled_at") @db.Timestamptz
-  session    Session           @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  disabled   Boolean         @default(false)
+  disabledAt DateTime?       @map("disabled_at") @db.Timestamptz
+  session    Session         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@id([sessionId, channel])
   @@map("channel_status")
 }
 
 model MessageLog {
-  id        String   @id @default(uuid())
-  sessionId String   @map("session_id")
-  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  channel   ReminderChannel
-  prayerName String? @map("prayer_name") @db.VarChar(32)
-  type      String   @db.VarChar(64)
-  direction MessageDirection
-  to        String   @db.VarChar(320)
-  body      String?  @db.Text
-  status    MessageDeliveryStatus
-  errorMessage String? @map("error_message") @db.Text
-  createdAt DateTime @default(now()) @map("created_at")
+  id           String                @id @default(uuid())
+  sessionId    String                @map("session_id")
+  session      Session               @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  channel      ReminderChannel
+  prayerName   String?               @map("prayer_name") @db.VarChar(32)
+  type         String                @db.VarChar(64)
+  direction    MessageDirection
+  to           String                @db.VarChar(320)
+  body         String?               @db.Text
+  status       MessageDeliveryStatus
+  errorMessage String?               @map("error_message") @db.Text
+  createdAt    DateTime              @default(now()) @map("created_at")
 
   @@index([sessionId])
   @@map("message_log")
 }
 
 model SentReminder {
-  id        String   @id @default(uuid())
-  sessionId String   @map("session_id")
-  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  prayerName String  @map("prayer_name") @db.VarChar(32)
-  prayerDate DateTime @map("prayer_date") @db.Date
-  channel   ReminderChannel
-  messageType String @map("message_type") @db.VarChar(64)
-  pushSubscriptionId String? @map("push_subscription_id")
-  pushSubscription PushSubscription? @relation(fields: [pushSubscriptionId], references: [id], onDelete: SetNull)
-  createdAt DateTime @default(now()) @map("created_at")
+  id                 String            @id @default(uuid())
+  sessionId          String            @map("session_id")
+  session            Session           @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  prayerName         String            @map("prayer_name") @db.VarChar(32)
+  prayerDate         DateTime          @map("prayer_date") @db.Date
+  channel            ReminderChannel
+  messageType        String            @map("message_type") @db.VarChar(64)
+  pushSubscriptionId String?           @map("push_subscription_id")
+  pushSubscription   PushSubscription? @relation(fields: [pushSubscriptionId], references: [id], onDelete: SetNull)
+  createdAt          DateTime          @default(now()) @map("created_at")
 
   @@index([sessionId])
   @@map("sent_reminders")
