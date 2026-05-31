@@ -1,6 +1,11 @@
-# Schema audit (Phase 0.2)
+# Schema audit
 
-Snapshot of the Mawqit Postgres schema as of 2026-05-08. Source of truth: [`prisma/schema.prisma`](../../prisma/schema.prisma) and the SQL files in [`prisma/migrations/`](../../prisma/migrations/). Update this doc whenever the schema changes.
+Snapshot of the Mawqit Postgres schema. Source of truth: [`prisma/schema.prisma`](../../prisma/schema.prisma) and the SQL files in [`prisma/migrations/`](../../prisma/migrations/). Update this doc whenever the schema changes.
+
+> **Updated 2026-05-31 (Phase 1.4):** the single-value location/contact columns moved
+> off `sessions` into `saved_locations` and `notification_recipients`, and
+> `subscriptions` + `donations` were added. See the new-tables and migration sections
+> below.
 
 ## Enums
 
@@ -11,6 +16,9 @@ Snapshot of the Mawqit Postgres schema as of 2026-05-08. Source of truth: [`pris
 | `MessageDirection` | `outbound`, `inbound` |
 | `MessageDeliveryStatus` | `sent`, `failed` |
 | `CronRunStatus` | `running`, `success`, `error` |
+| `RecipientType` | `email`, `sms` *(Phase 1.4)* |
+| `SubscriptionTier` | `monthly`, `quarterly`, `semiannual`, `yearly` *(Phase 1.4)* |
+| `SubscriptionStatus` | `active`, `expired` *(Phase 1.4)* |
 
 `sms` and `calendar` already exist in `ReminderChannel` even though SMS is a Phase 3 feature and the `.ics` calendar feed is Phase 2.5. Treat as intentional groundwork; do not remove.
 
@@ -27,14 +35,13 @@ The shareable-link credential. The session ID itself is the auth — anyone with
 | `id` | `id` | `text PK` | UUID, default generated |
 | `createdAt` | `created_at` | `timestamp(3)` | default `now()` |
 | `updatedAt` | `updated_at` | `timestamp(3)` | `@updatedAt` |
-| `latitude` | `latitude` | `double precision?` | **single-value; becomes 1:many in Phase 1.4** |
-| `longitude` | `longitude` | `double precision?` | **single-value; becomes 1:many in Phase 1.4** |
-| `timezone` | `timezone` | `varchar(128)?` | **single-value; becomes 1:many in Phase 1.4** |
 | `emailEnabled` | `email_enabled` | `boolean` | default `false` |
-| `emailAddress` | `email_address` | `varchar(320)?` | **single-value; becomes 1:many in Phase 1.4** |
 | `smsEnabled` | `sms_enabled` | `boolean` | default `false`; channel exists in schema, real sends Phase 3 |
-| `phoneNumber` | `phone_number` | `varchar(32)?` | **single-value; becomes 1:many in Phase 1.4 (or Phase 3)** |
 | `browserNotificationsEnabled` | `browser_notifications_enabled` | `boolean` | default `false` |
+
+> *Phase 1.4 removed `latitude`, `longitude`, `timezone`, `email_address`, and
+> `phone_number` from `sessions`. Location now lives in `saved_locations` and contact
+> info in `notification_recipients` (see below).*
 | `persistentReminders` | `persistent_reminders` | `boolean` | default `true` — drives the persistence pass |
 | `persistenceCadenceMinutes` | `persistence_cadence_minutes` | `integer` | default `15` |
 | `followupEnabled` | `followup_enabled` | `boolean` | default `false` |
@@ -162,6 +169,42 @@ Observability. One row per cron invocation, written at the start (`status='runni
 
 No FK, no `session_id` — this is global. PK on `id` is the only index.
 
+### `SavedLocation` → table `saved_locations` *(Phase 1.4)*
+
+A session's location(s). The `is_active = true` row drives prayer-time calculation.
+One-to-many so premium can save multiple; the free tier keeps a single active row
+(replaced on each save). Columns: `latitude`/`longitude` (`double precision`, required),
+`timezone` (`varchar(128)`, required), `name` (`varchar(120)?`, unused in 1.4),
+`is_active` (`boolean`), plus `session_id` FK (`ON DELETE CASCADE`) and timestamps.
+Indexes: PK on `id`, index on `session_id`.
+
+### `NotificationRecipient` → table `notification_recipients` *(Phase 1.4)*
+
+A session's email/SMS targets. The `is_primary = true` row (per `type`) is the default
+target. One-to-many so premium can add more; free tier keeps a single primary row per
+channel. Columns: `type` (`RecipientType`), `value` (`varchar(320)`, PII), `is_primary`
+(`boolean`), `verified_at` (`timestamptz?`, for the Phase 2.5 verification flow), plus
+`session_id` FK (`ON DELETE CASCADE`) and timestamps. Indexes: PK on `id`, index on
+`session_id`, index on `(type, value)` for inbound/recovery lookup by address.
+
+### `Subscription` → table `subscriptions` *(Phase 1.4, used from Phase 2)*
+
+Mawqit+ subscription. One-to-one with a live session via a unique nullable FK
+(`ON DELETE SET NULL` — the payment record survives session deletion;
+`stripe_customer_id` is the recovery anchor). `deleted_at` is a separate soft-delete for
+refund/chargeback removal. Columns: `stripe_customer_id` (required), `stripe_subscription_id`
+(`?`, nullable — one-time payments), `tier` (`SubscriptionTier`), `status`
+(`SubscriptionStatus`, default `active`), `period_end` (`timestamptz`), `last_renewed_at`
+(`timestamptz?`), `deleted_at` (`timestamptz?`). Indexes: PK on `id`, unique on
+`session_id`, index on `stripe_customer_id`. No reader until Phase 2.
+
+### `Donation` → table `donations` *(Phase 1.4, used from Phase 2.6)*
+
+Donation log. **No session link** — donations come from anonymous Stripe Payment Links
+(PLAN §2.6). Columns: `stripe_session_id` (`text`, unique), `amount` (`integer`, cents),
+`currency` (`varchar(3)`), `created_at`. Indexes: PK on `id`, unique on
+`stripe_session_id`. No reader until Phase 2.6.
+
 ## Cascade-delete summary
 
 | Child table | Trigger | Behavior |
@@ -173,7 +216,11 @@ No FK, no `session_id` — this is global. PK on `id` is the only index.
 | `reminder_cycles` | `sessions.id` removed | CASCADE delete |
 | `sent_reminders` | `push_subscriptions.id` removed | SET NULL on `push_subscription_id` |
 
-The Phase 1.4 tables (`subscriptions`, `donations`, `saved_locations`, `notification_recipients`) will need explicit cascade decisions per the resolved decision in `progress.md`: `subscriptions` and `donations` use **soft-delete**, while `saved_locations` and `notification_recipients` will likely cascade like the rest.
+Phase 1.4 cascade rules (implemented): `saved_locations` and
+`notification_recipients` **cascade-delete** with the session (config, no record
+value). `subscriptions` uses `ON DELETE SET NULL` on its session FK so the payment
+record survives, plus a `deleted_at` soft-delete column. `donations` has no session
+link, so session deletion doesn't touch it.
 
 ## Index summary
 
@@ -186,22 +233,33 @@ The Phase 1.4 tables (`subscriptions`, `donations`, `saved_locations`, `notifica
 | `message_log` | PK on `id` · index on `session_id` |
 | `sent_reminders` | PK on `id` · index on `session_id` · partial unique on non-push channels · partial unique on browser channel |
 | `cron_runs` | PK on `id` |
+| `saved_locations` | PK on `id` · index on `session_id` |
+| `notification_recipients` | PK on `id` · index on `session_id` · index on `(type, value)` |
+| `subscriptions` | PK on `id` · unique on `session_id` · index on `stripe_customer_id` |
+| `donations` | PK on `id` · unique on `stripe_session_id` |
 
-## Single-value fields that will become 1:N in Phase 1.4
+## Location/contact 1:N move (completed in Phase 1.4)
 
-Per [PLAN.md §1.4](../PLAN.md):
+The single-value location and contact columns moved off `sessions` into dedicated
+tables. With no production data yet, this was a **fresh-start cutover** (no backfill,
+columns dropped outright) rather than the keep-then-drop rollout PLAN §1.4 sketched.
 
-| Current location on `sessions` | Phase 1.4 destination |
+| Old `sessions` column | New home |
 |---|---|
-| `email_address` | new `notification_recipients` table, `type='email'`, `is_primary=true` for the migrated row |
-| `phone_number` | new `notification_recipients` table, `type='sms'`, `is_primary=true` for the migrated row |
-| `latitude`, `longitude`, `timezone` (one trio per session) | new `saved_locations` table, `is_active=true` for the migrated row |
-| Stripe identity | new `subscriptions` table (1:1 with session); none today |
-| Donation events | new `donations` log table; none today |
+| `email_address` | `notification_recipients`, `type='email'`, `is_primary=true` |
+| `phone_number` | `notification_recipients`, `type='sms'`, `is_primary=true` |
+| `latitude`, `longitude`, `timezone` | `saved_locations`, `is_active=true` |
+| (Stripe identity — none before) | `subscriptions` (1:1, used from Phase 2) |
+| (Donation events — none before) | `donations` (no session link, used from Phase 2.6) |
 
-Plan calls for keeping the existing columns during rollout for backward compatibility, then dropping once reads/writes have moved to the new tables.
+Readers resolve the active location and primary recipients via
+[`src/lib/session-targets.ts`](../../src/lib/session-targets.ts)
+(`activeLocation`, `primaryRecipientValue`); the PATCH `/api/sessions/[id]` save path
+writes them in a transaction.
 
-`prayer_method` stays on `sessions` for now. It is single-valued today and not in PLAN.md's Phase 1.4 list. If Phase 2 multi-location were to support per-location calculation methods, this would need to move to `saved_locations` — flagging as a future-Phase-2 design question, not a Phase 0/1 concern.
+`prayer_method` stays on `sessions` for now. It is single-valued today. If Phase 2
+multi-location supports per-location calculation methods, it would move to
+`saved_locations` — a future-Phase-2 design question, not a Phase 1 concern.
 
 ## Migrations history
 
@@ -215,6 +273,7 @@ Migrations are in [`prisma/migrations/`](../../prisma/migrations/). Each is a di
 | 4 | `20260329210000_slice4_cron_email` | Creates `ReminderChannel`, `MessageDirection`, `MessageDeliveryStatus`, `CronRunStatus` enums; creates `channel_status`, `message_log`, `sent_reminders`, `cron_runs`; adds the two partial unique indexes that enforce send-ledger idempotency |
 | 5 | `20260330120000_slice7_reminder_cycles` | Creates `reminder_cycles` with the composite unique constraint that defines a cycle |
 | 6 | `20260406202035_slice7` | Renames a single index on `reminder_cycles` (cosmetic — Prisma rename to fit Postgres' 63-char identifier limit). No schema-shape change. |
+| 7 | `20260531120000_phase_1_4_schema` | **Phase 1.4.** Drops `latitude`, `longitude`, `timezone`, `email_address`, `phone_number` from `sessions`. Adds enums `RecipientType`, `SubscriptionTier`, `SubscriptionStatus`. Creates `saved_locations`, `notification_recipients` (both cascade), `subscriptions` (FK `SET NULL` + `deleted_at`), `donations` (no session link). Authored offline via `prisma migrate diff`; apply with `prisma migrate dev`. |
 
 `migration_lock.toml` pins the provider to `postgresql`.
 
@@ -230,4 +289,10 @@ Migrations are in [`prisma/migrations/`](../../prisma/migrations/). Each is a di
 
 5. **`SentReminder.pushSubscriptionId → SET NULL`** is the right choice (preserves the ledger after a device unsubscribes), but it does mean a future re-subscribe of the same device — which gets a new `push_subscriptions.id` — will see no ledger row and could re-send the same prayer. Acceptable: a re-subscribe is a deliberate action, not an accidental retry. Documenting so future debugging doesn't panic about it.
 
-6. **Phase 1.4 schema additions** (`subscriptions`, `donations`, `saved_locations`, `notification_recipients`) need design before implementation. Open items the migration PR will need to settle: indexes, soft-delete column shape (`deleted_at` timestamp vs `is_deleted` boolean — `deleted_at` is the convention; recommend that), cascade rules for the two non-payment tables, and the backfill plan for moving the four existing single-value session columns onto the new tables without dropping the originals in the same migration.
+6. **Phase 1.4 schema additions — done** (migration `20260531120000_phase_1_4_schema`).
+   Resolved: `deleted_at` soft-delete on `subscriptions`; cascade for the two config
+   tables; `donations` standalone (no session link); fresh-start cutover (no backfill,
+   no prod data). **Remaining for later phases:** premium row limits (3 locations / 3
+   recipients vs 1) are not DB-enforced — that's the Phase 2.4 `isPremium` gate.
+   `verified_at` on recipients is unused until the Phase 2.5 verification flow.
+   `subscriptions`/`donations` have no reader until Phase 2.
