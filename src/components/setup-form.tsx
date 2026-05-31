@@ -12,7 +12,7 @@ import {
 } from "@/lib/timezone-options";
 import { BrowserPushHint } from "@/components/browser-push-hint";
 import { PrayerTimesPreview } from "@/components/prayer-times-preview";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/class-names";
 import { MapPin } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
