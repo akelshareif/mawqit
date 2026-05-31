@@ -1,9 +1,9 @@
 # Mawqit progress
 
-**Last updated:** 2026-05-31 16:30
-**Current phase:** Phase 0 — Exploratory pass and cleanup (all sections done; at acceptance gate)
-**Currently working on:** Nothing in flight. All of Phase 0 (0.1–0.8) is complete and in PR #1. Awaiting owner review + merge (the acceptance gate). Next after merge: Phase 0 summary, then Phase 1.4 (schema) per PLAN execution order.
-**Blocked:** none — PR #1 needs owner review/merge before Phase 1 begins (gate, not a blocker)
+**Last updated:** 2026-05-31 19:00
+**Current phase:** Phase 1 — Production hardening
+**Currently working on:** 1.4 schema migration — code complete on feat/phase-1.4-schema (PR #3). Migration NOT yet applied to the Neon DB (it was offline). Phase 0 merged (PR #1); Phase 0 summary in PR #2 (separate branch).
+**Blocked:** Neon DB unreachable this session — `prisma migrate dev` couldn't run. Migration file authored offline + committed; owner needs to apply it once the DB is up.
 
 ## Phase 0 — Exploratory pass and cleanup
 
@@ -21,7 +21,7 @@
 - [ ] 1.1 Domain and email infrastructure
 - [ ] 1.2 Wire inbound email
 - [ ] 1.3 Prayer-time correctness
-- [ ] 1.4 Schema migration
+- [~] 1.4 Schema migration (code + migration committed; migration not yet applied to DB)
 - [ ] 1.5 Observability
 - [ ] 1.6 Legal and data
 - [ ] 1.7 Rate limiting and abuse hardening
@@ -120,7 +120,13 @@
 
 ## Blockers
 
-(empty)
+- **Neon DB unreachable (2026-05-31).** During Phase 1.4 the database returned
+  `P1001: Can't reach database server`, so `prisma migrate dev` could not run. Worked
+  around it by authoring the migration SQL offline via `prisma migrate diff` (committed
+  at `prisma/migrations/20260531120000_phase_1_4_schema/migration.sql`) and
+  regenerating the client. **To clear:** once the DB is up, run `npm run db:migrate`
+  (or `prisma migrate reset` for a clean slate), then `npx prisma migrate status` to
+  confirm.
 
 ## Open questions for the project owner
 
