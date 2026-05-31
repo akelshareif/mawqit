@@ -1,9 +1,9 @@
 # Mawqit progress
 
-**Last updated:** 2026-05-31 16:25
-**Current phase:** Phase 0 — Exploratory pass and cleanup
-**Currently working on:** 0.7 complete, PR #1 open for review; 0.8 outputs + acceptance-gate review is next
-**Blocked:** none
+**Last updated:** 2026-05-31 16:30
+**Current phase:** Phase 0 — Exploratory pass and cleanup (all sections done; at acceptance gate)
+**Currently working on:** Nothing in flight. All of Phase 0 (0.1–0.8) is complete and in PR #1. Awaiting owner review + merge (the acceptance gate). Next after merge: Phase 0 summary, then Phase 1.4 (schema) per PLAN execution order.
+**Blocked:** none — PR #1 needs owner review/merge before Phase 1 begins (gate, not a blocker)
 
 ## Phase 0 — Exploratory pass and cleanup
 
@@ -47,6 +47,11 @@
 - [ ] 3.6 Masjid outreach kit
 
 ## Recent activity
+
+2026-05-31 — Phase 0 fully complete (0.1–0.8). Confirmed all seven docs/context/*.md
+              outputs exist and match the codebase: repo-map, schema, pipeline, inbound,
+              tests, env, cleanup. Ticked 0.7 and 0.8. Only the acceptance gate remains
+              (owner review + merge of PR #1). No Phase 1 work until the gate passes.
 
 2026-05-31 — Opened PR #1 (`chore: phase 0 cleanup`) → main. Local main had 9 unpushed
               Phase 0 docs commits while origin/main had a README deploy-link commit;
