@@ -4,10 +4,6 @@
 **Current phase:** Phase 1 — Production hardening
 **Currently working on:** 1.4 complete and merged (PR #3) — migration applied to Neon (`prisma migrate status` = up to date). PRs #1/#2/#3 all merged to main (a053f87). Next per PLAN execution order: 1.1+1.2 (domain + inbound email), then 1.5 (observability), then 1.3/1.6/1.7/1.8.
 **Blocked:** none
-**Last updated:** 2026-05-31 17:00
-**Current phase:** Phase 0 complete (gate passed) → Phase 1 next
-**Currently working on:** Phase 0 done: PR #1 merged to main (7266f6e), acceptance gate passed, phase summary written at docs/phases/phase_0_summary.md. Next: Phase 1.4 (schema migration) per PLAN execution order.
-**Blocked:** none
 
 ## Phase 0 — Exploratory pass and cleanup
 
@@ -18,7 +14,7 @@
 - [x] 0.5 Test coverage map
 - [x] 0.6 Environment and deployment
 - [x] 0.7 Repo cleanup
-- [ ] 0.8 Outputs of Phase 0 written
+- [x] 0.8 Outputs of Phase 0 written
 
 ## Phase 1 — Production hardening
 
