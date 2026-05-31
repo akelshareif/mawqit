@@ -4,6 +4,10 @@
 **Current phase:** Phase 1 — Production hardening
 **Currently working on:** 1.4 schema migration — code complete on feat/phase-1.4-schema (PR #3). Migration NOT yet applied to the Neon DB (it was offline). Phase 0 merged (PR #1); Phase 0 summary in PR #2 (separate branch).
 **Blocked:** Neon DB unreachable this session — `prisma migrate dev` couldn't run. Migration file authored offline + committed; owner needs to apply it once the DB is up.
+**Last updated:** 2026-05-31 17:00
+**Current phase:** Phase 0 complete (gate passed) → Phase 1 next
+**Currently working on:** Phase 0 done: PR #1 merged to main (7266f6e), acceptance gate passed, phase summary written at docs/phases/phase_0_summary.md. Next: Phase 1.4 (schema migration) per PLAN execution order.
+**Blocked:** none
 
 ## Phase 0 — Exploratory pass and cleanup
 
@@ -59,6 +63,11 @@
               case — earlier "112" was a wrong figure), build 0. Send-ledger untouched.
               Migration still NOT applied to DB (Neon was offline); owner runs
               `prisma migrate dev` when it's up.
+2026-05-31 — Phase 0 complete & gate passed. PR #1 merged to main as 7266f6e. Wrote the
+              phase summary at docs/phases/phase_0_summary.md (what was built, concepts,
+              rationale, verification steps, Phase 1 heads-up). Recovered a local-main
+              divergence en route (stale pre-merge local main reset to origin/main).
+              Next per PLAN execution order: Phase 1.4 schema migration first.
 
 2026-05-31 — Phase 0 fully complete (0.1–0.8). Confirmed all seven docs/context/*.md
               outputs exist and match the codebase: repo-map, schema, pipeline, inbound,
