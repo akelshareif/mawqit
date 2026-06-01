@@ -7,9 +7,8 @@ import {
 import { formatDateInTimeZone, parseUtcDateFromYmd } from "@/lib/calendar-date";
 import { getLearnToPrayUrl } from "@/lib/env";
 import { logger } from "@/lib/logger";
-import { normalizeEmail, normalizePhoneE164 } from "@/lib/normalize";
+import { normalizeEmail } from "@/lib/normalize";
 import { createEmailProvider } from "@/lib/providers/email";
-import { createMockSmsProvider } from "@/lib/providers/sms";
 import { sessionUrl } from "@/lib/public-url";
 import { findLatestOpenCycleForAck } from "@/lib/reminder-cycle";
 import { activeLocation, primaryRecipientValue } from "@/lib/session-targets";
@@ -21,7 +20,7 @@ const OUTBOUND = {
   ack: "ack_reply",
 } as const;
 
-export type InboundChannel = "email" | "sms";
+export type InboundChannel = "email";
 
 export async function handleInbound(
   prisma: PrismaClient,
@@ -34,7 +33,7 @@ export async function handleInbound(
 
   let from: string;
   try {
-    from = channel === "email" ? normalizeEmail(fromRaw) : normalizePhoneE164(fromRaw);
+    from = normalizeEmail(fromRaw);
   } catch {
     logger.warn("inbound", "Invalid inbound address", {
       channel,
@@ -43,29 +42,17 @@ export async function handleInbound(
     return { outcome: "invalid_address" };
   }
 
-  const session =
-    channel === "email"
-      ? await prisma.session.findFirst({
-          where: {
-            recipients: { some: { type: "email", value: from, isPrimary: true } },
-          },
-          include: {
-            savedLocations: { where: { isActive: true }, take: 1 },
-            recipients: { where: { isPrimary: true } },
-          },
-        })
-      : await prisma.session.findFirst({
-          where: {
-            recipients: { some: { type: "sms", value: from, isPrimary: true } },
-          },
-          include: {
-            savedLocations: { where: { isActive: true }, take: 1 },
-            recipients: { where: { isPrimary: true } },
-          },
-        });
+  const session = await prisma.session.findFirst({
+    where: {
+      recipients: { some: { type: "email", value: from, isPrimary: true } },
+    },
+    include: {
+      savedLocations: { where: { isActive: true }, take: 1 },
+      recipients: { where: { isPrimary: true } },
+    },
+  });
 
-  const reminderChannel =
-    channel === "email" ? ReminderChannel.email : ReminderChannel.sms;
+  const reminderChannel = ReminderChannel.email;
 
   if (!session) {
     logger.info("inbound", "Inbound: no session for address", {
@@ -77,7 +64,6 @@ export async function handleInbound(
   const sess = session;
   const loc = activeLocation(sess.savedLocations);
   const emailAddress = primaryRecipientValue(sess.recipients, "email");
-  const phoneNumber = primaryRecipientValue(sess.recipients, "sms");
 
   await prisma.messageLog.create({
     data: {
@@ -92,18 +78,10 @@ export async function handleInbound(
   });
 
   const email = createEmailProvider(prisma);
-  const sms = createMockSmsProvider(prisma);
 
   async function sendOutbound(text: string, messageLogType: string): Promise<void> {
-    if (channel === "email" && emailAddress) {
-      await email.send(
-        emailAddress,
-        "Mawqit",
-        text,
-        { sessionId: sess.id, messageLogType },
-      );
-    } else if (channel === "sms" && phoneNumber) {
-      await sms.send(phoneNumber, text, {
+    if (emailAddress) {
+      await email.send(emailAddress, "Mawqit", text, {
         sessionId: sess.id,
         messageLogType,
       });
@@ -130,9 +108,8 @@ export async function handleInbound(
       },
     });
 
-    const label = channel === "email" ? "email" : "SMS";
     await sendOutbound(
-      `Notifications for ${label} have been stopped.`,
+      "Notifications for email have been stopped.",
       OUTBOUND.stop,
     );
     logger.info("inbound", "Inbound: STOP received, channel disabled", {

@@ -33,7 +33,7 @@ export async function POST(req: Request) {
   const body = typeof parsed.body === "string" ? parsed.body : "";
 
   const ch = channelRaw.toLowerCase();
-  if (ch !== "email" && ch !== "sms") {
+  if (ch !== "email") {
     return NextResponse.json({ ok: true, outcome: "bad_channel" });
   }
 

@@ -26,13 +26,6 @@ describe("handleInbound", () => {
     vi.clearAllMocks();
   });
 
-  it("returns invalid_address for bad SMS number", async () => {
-    const prisma = mockPrisma();
-    const r = await handleInbound(prisma as never, "sms", "no-plus", "STOP");
-    expect(r.outcome).toBe("invalid_address");
-    expect(prisma.session.findFirst).not.toHaveBeenCalled();
-  });
-
   it("returns no_session when address unknown", async () => {
     const prisma = mockPrisma();
     prisma.session.findFirst.mockResolvedValue(null);

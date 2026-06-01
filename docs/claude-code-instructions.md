@@ -147,14 +147,14 @@ If you find yourself naming something `sendEmailV2`, `sendEmailWithRetry`, `disp
 
 ### Don't over-abstract
 
-- **No premature abstraction.** Don't build a generic `ReminderChannel` interface to cover the case of three hypothetical future channels. Three concrete channel implementations (email, push, SMS), refactored into a shared interface once the pattern is real, beats one interface designed before any channel works end-to-end.
+- **No premature abstraction.** Don't build a generic `ReminderChannel` interface to cover hypothetical future channels. Two concrete channel implementations (email, browser push), refactored into a shared interface once the pattern is real, beats one interface designed before any channel works end-to-end.
 - **No wrapper functions that don't add value.** If `function fetchUrl(url) { return fetch(url) }` is the entire wrapper, just call `fetch` directly.
 - **Inline before extracting.** If a piece of logic is used in one place, leave it inline. Extract only when there are at least two callers, or when the extraction makes the original site materially cleaner.
 
 ### Comments
 
 - **No comments that restate the code.** `// increment counter` above `counter += 1` is forbidden. Comments exist for the **why**, rarely for the **what**.
-- **Comments earn their place when:** explaining a non-obvious tradeoff, documenting a workaround for an external bug (Resend quirk, browser push spec edge case, Twilio A2P rule), or flagging surprising context that future readers couldn't infer from the code itself.
+- **Comments earn their place when:** explaining a non-obvious tradeoff, documenting a workaround for an external bug (Resend quirk, browser push spec edge case), or flagging surprising context that future readers couldn't infer from the code itself.
 - **JSDoc on public exports, only when it says more than the signature.** A function `function normalizeEmail(value: string): string` doesn't need a comment saying "Normalize an email." It does need one if there's non-obvious behavior worth flagging — strips dots from gmail addresses, lowercases, etc.
 - **Type signatures + good names = most documentation.** If you find yourself writing JSDoc to explain what arguments mean, the argument names are probably wrong.
 
@@ -264,11 +264,11 @@ When in doubt about whether something is sensitive, ask.
 
 These rules apply to every outbound call from the cron pipeline, the inbound webhook handler, or any payment route:
 
-- **Mock modes are sacred.** `WEB_PUSH_MODE=mock`, `EMAIL_FORCE_MOCK=true`, and the future `WEB_SMS_MODE=mock` exist so the cron can be exercised in dev and test without paying for real sends. Code that ignores these flags is broken.
+- **Mock modes are sacred.** `WEB_PUSH_MODE=mock` and `EMAIL_FORCE_MOCK=true` exist so the cron can be exercised in dev and test without paying for real sends. Code that ignores these flags is broken.
 - **Idempotency is mandatory.** The send ledger prevents duplicate reminders when cron runs more than once. Every new send code path checks the ledger before sending and writes to it after.
-- **Webhook signatures must be verified.** Resend inbound, Stripe webhooks, and (later) Twilio webhooks all sign their requests. Verify the signature before trusting the payload. Reject unsigned or invalid-signature requests with `401`.
+- **Webhook signatures must be verified.** Resend inbound and Stripe webhooks both sign their requests. Verify the signature before trusting the payload. Reject unsigned or invalid-signature requests with `401`.
 - **Webhook idempotency keys.** Stripe and Resend may retry. Process each event ID once.
-- **Per-provider rate limits.** Resend's free tier caps at 100/day; Pro caps at the plan limit. When near the cap, surface a structured warning and back off. Twilio enforces A2P throughput.
+- **Per-provider rate limits.** Resend's free tier caps at 100/day; Pro caps at the plan limit. When near the cap, surface a structured warning and back off.
 - **Honor 410 / 404 from push services.** Web Push subscriptions go stale; existing code already cleans these up. Don't bypass.
 - **Signed tokens for any user-clickable link that triggers state change.** Calendar feed URLs, renewal-confirm links, recovery links, and one-click unsubscribe links all use signed JWTs (or equivalent). Token rotation must be possible per session.
 - **Never store full card data.** Stripe handles card capture. We store the customer ID and subscription metadata, never PAN or CVV.
@@ -299,13 +299,13 @@ The audience is the project owner — a developer who built the original Mawqit 
 
 1. **What was built (plain English).** 3–5 paragraphs of prose, not bullets. Explain what the system can now do that it couldn't before. Connect concepts. Show how the pieces fit together. Mention where this slots into the larger plan.
 
-2. **Concepts introduced.** Anything new this phase that the project owner might not already know — A2P 10DLC, idempotent webhooks, signed JWTs, structured logging, Sentry source maps, Stripe webhook event ordering, etc. One short paragraph per concept, with a one-line plain-English definition. Skip concepts already familiar from the original class project.
+2. **Concepts introduced.** Anything new this phase that the project owner might not already know — idempotent webhooks, signed JWTs, structured logging, Sentry source maps, Stripe webhook event ordering, etc. One short paragraph per concept, with a one-line plain-English definition. Skip concepts already familiar from the original class project.
 
 3. **Why the choices were made.** Brief rationale for the non-obvious decisions in this phase. Why this library over that one, why this pattern, why this trade-off. Not exhaustive — only the choices a curious reader would wonder about.
 
 4. **Verification steps.** Concrete commands the project owner can run, in order, with expected output. One section per acceptance-gate bullet from `PLAN.md`. Each step says: what to run, what to look for, what counts as "passed." Be specific — don't say "verify the tests pass," show the command and a snippet of the expected output. If something needs to be checked in a UI (Sentry dashboard, Stripe dashboard, Resend logs), give the click-path.
 
-5. **Heads-up for the next phase.** One short section noting anything the next phase will materially change or build on. Examples: "Phase 2 will introduce real Stripe charges — `STRIPE_SECRET_KEY` must be set in production env." or "Phase 3 will add SMS, which requires A2P 10DLC registration that takes 10–15 days; start that before any other Phase 3 work."
+5. **Heads-up for the next phase.** One short section noting anything the next phase will materially change or build on. Examples: "Phase 2 will introduce real Stripe charges — `STRIPE_SECRET_KEY` must be set in production env." or "Phase 1.2 wires the real Resend inbound webhook, which requires a verified domain — register it before starting."
 
 **Tone:** clear, direct, slightly informal. Like explaining to a colleague who's smart and built the original codebase but may not have shipped a paid SaaS before. No condescension, no fluff.
 

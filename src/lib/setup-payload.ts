@@ -10,8 +10,6 @@ export type SetupPayload = {
   timezone: string;
   emailEnabled: boolean;
   emailAddress: string | null;
-  smsEnabled: boolean;
-  phoneNumber: string | null;
   browserNotificationsEnabled: boolean;
   persistentReminders: boolean;
   persistenceCadenceMinutes: number;
@@ -86,9 +84,6 @@ export function parseSetupPayload(
     }
   }
 
-  const smsEnabled = false;
-  const phoneNumber: string | null = null;
-
   const persistentReminders = asBool(o.persistentReminders) ?? true;
   const persistenceCadenceMinutes = asNum(o.persistenceCadenceMinutes);
   if (
@@ -127,8 +122,6 @@ export function parseSetupPayload(
       timezone,
       emailEnabled,
       emailAddress,
-      smsEnabled,
-      phoneNumber,
       browserNotificationsEnabled,
       persistentReminders,
       persistenceCadenceMinutes,

@@ -94,7 +94,7 @@ If `followupDue`, send a follow-up (`messageType='followup'`); the `continue` af
 Both branches:
 
 - Claim a new `sent_reminders` row with the corresponding `messageType`. The follow-up has `messageType='followup'`, the resend has `messageType='persistence_resend'`. Because `messageType` is part of the partial unique index, these don't collide with the initial `prayer_reminder` row from the same prayer.
-- Dispatch through the per-channel branch: `email` → `EmailProvider.send`, `sms` → `createMockSmsProvider().send`, `browser` → look up the `push_subscriptions` row by `cycle.deviceKey` and call `push.sendPrayerReminder`.
+- Dispatch through the per-channel branch: `email` → `EmailProvider.send`, `browser` → look up the `push_subscriptions` row by `cycle.deviceKey` and call `push.sendPrayerReminder`.
 - On `push.gone`, delete the `sent_reminders` claim and the dead subscription. On any other failure, just delete the claim.
 - On success, update the cycle: `markCycleFollowupSent` (sets `followupSent=true`, refreshes `lastSentAt`) for follow-ups, `touchCycleAfterPersistenceSend` (increments `resendCount`, refreshes `lastSentAt`) for resends.
 
@@ -104,7 +104,7 @@ Both branches:
 
 The whole pipeline rests on three primitives:
 
-1. **Two partial unique indexes on `sent_reminders`** (see [`schema.md`](schema.md)) — one for email/SMS/calendar, one for browser. They make `INSERT INTO sent_reminders` either succeed (this send is new) or fail with `P2002` (someone else got there first).
+1. **Two partial unique indexes on `sent_reminders`** (see [`schema.md`](schema.md)) — one for email/calendar, one for browser. They make `INSERT INTO sent_reminders` either succeed (this send is new) or fail with `P2002` (someone else got there first).
 2. **Claim-then-send.** Every send path follows the pattern:
    ```
    claim = tryCreateSentReminder(...)        // INSERT
@@ -130,13 +130,13 @@ A cycle naturally retires three ways: ack received, becomes stale (next prayer p
 
 ## Acknowledgment ([`/api/sessions/[sessionId]/reminders/ack`](../../src/app/api/sessions/[sessionId]/reminders/ack/route.ts))
 
-`POST` from the service worker on a browser-push notification interaction. Updates every matching `reminder_cycles` row to `ackReceived=true`. **Only `channel=browser` is accepted today** — the route hard-rejects anything else with 400. Email/SMS reminders have no ack mechanism, so their cycles only retire by going stale.
+`POST` from the service worker on a browser-push notification interaction. Updates every matching `reminder_cycles` row to `ackReceived=true`. **Only `channel=browser` is accepted today** — the route hard-rejects anything else with 400. Email reminders have no ack mechanism, so their cycles only retire by going stale.
 
 The route is rate-limited (120/min/IP per session) and validates session-ID format. It does not require any other auth — possession of the session URL is the credential, and the worst a forged ack does is silence one cycle's resends.
 
 ## Mock modes — full inventory of env switches
 
-The pipeline has two real providers (email via Resend, browser push via the `web-push` library) and one always-mock provider (SMS). Every provider write goes through `message_log` regardless of mock/real, so the audit trail is consistent.
+The pipeline has two real providers (email via Resend, browser push via the `web-push` library). Every provider write goes through `message_log` regardless of mock/real, so the audit trail is consistent.
 
 | Env var | Read by | Default | Effect |
 |---|---|---|---|
@@ -151,28 +151,23 @@ The pipeline has two real providers (email via Resend, browser push via the `web
 | `CRON_SECRET` | [`verifyCronSecret`](../../src/lib/cron-auth.ts) | unset | If unset or empty, the cron route refuses every request (401). |
 | `CRON_INTERVAL_MINUTES` | [`getCronIntervalMinutes`](../../src/lib/env.ts:19) | `5` | Documented for external schedulers. The route doesn't enforce it. |
 | `SESSION_EXPIRY_WARNING_DAYS` | [`getSessionExpiryWarningDays`](../../src/lib/env.ts:10) | `3` | Days before `expiresAt` to send the "expires soon" notice. |
-| `WEB_SMS_MODE` | **not yet read by any code** | — | Reserved env name from `CLAUDE.md`/`PLAN.md`; SMS today is hard-coded mock. |
 
-The mock email and mock SMS providers don't have a separate "force on" flag — they're returned implicitly when their real-provider env is missing or `EMAIL_FORCE_MOCK=true`. The Web Push mock is the inverse: it's the default (`WEB_PUSH_MODE=mock`), and you opt **in** to real with `WEB_PUSH_MODE=real`.
+The mock email provider doesn't have a separate "force on" flag — it's returned implicitly when the real-provider env is missing or `EMAIL_FORCE_MOCK=true`. The Web Push mock is the inverse: it's the default (`WEB_PUSH_MODE=mock`), and you opt **in** to real with `WEB_PUSH_MODE=real`.
 
 ## Things to revisit
 
-1. **There is no initial-pass for SMS.** The cron has `runEmailReminderPass` and `runBrowserReminderPass`, but no `runSmsReminderPass`. The persistence pass has an SMS branch (using `createMockSmsProvider`), but it can never trigger because no `reminder_cycles` row is ever created with `channel='sms'` — the initial pass that would seed one doesn't exist. SMS plumbing is genuinely groundwork waiting for Phase 3, and the persistence-pass SMS branch is unreachable until then. Do not delete it in 0.7.
+1. **Email provider mock-fallback is silent.** When `RESEND_API_KEY` or `RESEND_FROM` is missing in production, [`createEmailProvider`](../../src/lib/providers/email.ts:163) returns the mock provider with no warning logged. A misconfigured production deploy would silently log every "send" to `message_log` and never deliver. Phase 1.5 (observability) should add a startup log + admin-page surface for "current email mode = mock|real" so this is visible. Flagging now.
 
-2. **Email provider mock-fallback is silent.** When `RESEND_API_KEY` or `RESEND_FROM` is missing in production, [`createEmailProvider`](../../src/lib/providers/email.ts:163) returns the mock provider with no warning logged. A misconfigured production deploy would silently log every "send" to `message_log` and never deliver. Phase 1.5 (observability) should add a startup log + admin-page surface for "current email mode = mock|real" so this is visible. Flagging now.
+2. **`SESSION_VALIDITY_DAYS` is read** ([`getSessionValidityDays`](../../src/lib/env.ts:1)) but the cron pipeline doesn't consume it; only the session create/update path does. This is correct (the cron only checks `expiresAt`, which was computed at save time using `SESSION_VALIDITY_DAYS`). Documenting so a future reader doesn't grep for it in cron and conclude something is missing.
 
-3. **`createMockSmsProvider` is created and unused in `recover-session.ts` and the persistence pass.** It's instantiated inside `runPersistencePass` and `findSessionForRecovery`. The persistence-pass instance is consumed only on the SMS branch (which is unreachable, point 1). The recover-session instance probably is consumed — verify in 0.4 (inbound and channel logic). If unused there too, an unused-import flag could fire.
+3. **`MESSAGE_TYPE.calendarEventEnsured`** is defined in [`message-types.ts`](../../src/lib/message-types.ts) but never used. Reserved for the Phase 2.5 calendar feed. Don't delete.
 
-4. **`SESSION_VALIDITY_DAYS` is read** ([`getSessionValidityDays`](../../src/lib/env.ts:1)) but the cron pipeline doesn't consume it; only the session create/update path does. This is correct (the cron only checks `expiresAt`, which was computed at save time using `SESSION_VALIDITY_DAYS`). Documenting so a future reader doesn't grep for it in cron and conclude something is missing.
+4. **Persistence pass loops in memory.** It loads every open `reminder_cycles` row in one query and iterates. At 5,000 active sessions × 5 prayers, that's 25k rows on a busy day. Fine for now. Phase 1.5/Phase 3 may want to chunk if the table grows. Not Phase 0 work.
 
-5. **`MESSAGE_TYPE.calendarEventEnsured`** is defined in [`message-types.ts`](../../src/lib/message-types.ts) but never used. Reserved for the Phase 2.5 calendar feed. Don't delete.
+5. **Browser ack route only matches by `(session, channel='browser', prayerName, prayerDate, deviceKey)` with `ackReceived=false`.** A delayed/duplicate ack after the cycle is already acked returns `updated: 0` with no error — that's intentional and idempotent. Documenting because the response shape ("ok: true, updated: 0") could read as a failure but isn't.
 
-6. **Persistence pass loops in memory.** It loads every open `reminder_cycles` row in one query and iterates. At 5,000 active sessions × 5 prayers, that's 25k rows on a busy day. Fine for now. Phase 1.5/Phase 3 may want to chunk if the table grows. Not Phase 0 work.
+6. **Resend's `result.error` shape** is hand-parsed in [`createResendEmailProvider`](../../src/lib/providers/email.ts:86-92): "if it's an object with `message`, use that, else `JSON.stringify`." This is fine but fragile against future Resend SDK changes. Phase 1.1 (domain + Resend setup) should re-check this when the SDK gets exercised against real sends.
 
-7. **Browser ack route only matches by `(session, channel='browser', prayerName, prayerDate, deviceKey)` with `ackReceived=false`.** A delayed/duplicate ack after the cycle is already acked returns `updated: 0` with no error — that's intentional and idempotent. Documenting because the response shape ("ok: true, updated: 0") could read as a failure but isn't.
+7. ~~**`expiry*SentAt` markers don't reset on session renewal.**~~ **Correction (verified during 0.4):** they *do* reset. [`PATCH /api/sessions/[id]`](../../src/app/api/sessions/[sessionId]/route.ts) explicitly sets both `expiryWarningSentAt` and `expiryDayReminderSentAt` to `null` on every save, alongside the renewed `expiresAt`. So the warning window will re-fire correctly the next time the session approaches expiry. No bug here — leaving the strikethrough as a record of an earlier mis-read.
 
-8. **Resend's `result.error` shape** is hand-parsed in [`createResendEmailProvider`](../../src/lib/providers/email.ts:86-92): "if it's an object with `message`, use that, else `JSON.stringify`." This is fine but fragile against future Resend SDK changes. Phase 1.1 (domain + Resend setup) should re-check this when the SDK gets exercised against real sends.
-
-9. ~~**`expiry*SentAt` markers don't reset on session renewal.**~~ **Correction (verified during 0.4):** they *do* reset. [`PATCH /api/sessions/[id]`](../../src/app/api/sessions/[sessionId]/route.ts) explicitly sets both `expiryWarningSentAt` and `expiryDayReminderSentAt` to `null` on every save, alongside the renewed `expiresAt`. So the warning window will re-fire correctly the next time the session approaches expiry. No bug here — leaving the strikethrough as a record of an earlier mis-read.
-
-10. **No structured logging of per-channel success/fail counts.** PLAN.md §1.5 asks for "structured logging on cron runs with session count and per-channel success/fail." Today we log per-message info-level lines and the run total, but not a per-channel breakdown. Phase 1.5 will need to add this.
+8. **No structured logging of per-channel success/fail counts.** PLAN.md §1.5 asks for "structured logging on cron runs with session count and per-channel success/fail." Today we log per-message info-level lines and the run total, but not a per-channel breakdown. Phase 1.5 will need to add this.

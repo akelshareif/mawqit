@@ -154,8 +154,6 @@ export function SetupForm({
       timezone: timezone.trim(),
       emailEnabled,
       emailAddress: emailEnabled ? emailAddress : null,
-      smsEnabled: false,
-      phoneNumber: null,
       browserNotificationsEnabled,
       persistentReminders,
       persistenceCadenceMinutes: Number.parseInt(persistenceCadenceMinutes, 10),

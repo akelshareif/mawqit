@@ -3,7 +3,6 @@ import { ReminderChannel } from "@/generated/prisma/enums";
 
 type ChannelFlags = {
   emailEnabled: boolean;
-  smsEnabled: boolean;
   browserNotificationsEnabled: boolean;
 };
 
@@ -18,7 +17,6 @@ export async function syncChannelStatuses(
   const entries: { channel: (typeof ReminderChannel)[keyof typeof ReminderChannel]; enabled: boolean }[] =
     [
       { channel: ReminderChannel.email, enabled: flags.emailEnabled },
-      { channel: ReminderChannel.sms, enabled: flags.smsEnabled },
       { channel: ReminderChannel.browser, enabled: flags.browserNotificationsEnabled },
     ];
 

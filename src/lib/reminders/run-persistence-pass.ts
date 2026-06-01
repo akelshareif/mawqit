@@ -12,7 +12,6 @@ import {
   createEmailProvider,
   type EmailProvider,
 } from "@/lib/providers/email";
-import { createMockSmsProvider } from "@/lib/providers/sms";
 import { createWebPushProvider } from "@/lib/providers/web-push";
 import { sessionUrl } from "@/lib/public-url";
 import {
@@ -30,7 +29,6 @@ import type { RecipientType } from "@/generated/prisma/enums";
 type PersistenceSession = {
   id: string;
   emailEnabled: boolean;
-  smsEnabled: boolean;
   browserNotificationsEnabled: boolean;
   savedLocations: { latitude: number; longitude: number; timezone: string }[];
   recipients: { type: RecipientType; value: string; isPrimary: boolean }[];
@@ -60,7 +58,6 @@ export async function runPersistencePass(
   });
 
   const email = createEmailProvider(prisma);
-  const sms = createMockSmsProvider(prisma);
   const push = createWebPushProvider(prisma);
 
   const sessionsProcessed = new Set(cycles.map((c) => c.sessionId));
@@ -140,7 +137,6 @@ export async function runPersistencePass(
         label,
         openUrl,
         email,
-        sms,
         push,
         now: reminderNow,
       });
@@ -160,7 +156,6 @@ export async function runPersistencePass(
         label,
         openUrl,
         email,
-        sms,
         push,
         now: reminderNow,
       });
@@ -187,7 +182,6 @@ async function sendFollowupForChannel(args: {
   label: string;
   openUrl: string;
   email: EmailProvider;
-  sms: ReturnType<typeof createMockSmsProvider>;
   push: ReturnType<typeof createWebPushProvider>;
   now: Date;
 }): Promise<boolean> {
@@ -200,13 +194,11 @@ async function sendFollowupForChannel(args: {
     label,
     openUrl,
     email,
-    sms,
     push,
     now,
   } = args;
 
   const emailAddress = primaryRecipientValue(session.recipients, "email");
-  const phoneNumber = primaryRecipientValue(session.recipients, "sms");
   const timezone = activeLocation(session.savedLocations)?.timezone ?? null;
 
   const pushSubscriptionId =
@@ -246,27 +238,6 @@ async function sendFollowupForChannel(args: {
     logger.info("cron", "Persistence follow-up email sent", {
       sessionIdPrefix: session.id.slice(0, 8),
       prayer: cycle.prayerName,
-    });
-    return true;
-  }
-
-  if (channel === ReminderChannel.sms) {
-    if (!session.smsEnabled || !phoneNumber) {
-      await prisma.sentReminder.delete({ where: { id: claimed.id } });
-      return false;
-    }
-    const result = await sms.send(phoneNumber, body, {
-      sessionId: session.id,
-      prayerName: cycle.prayerName,
-      messageLogType: MESSAGE_TYPE.followup,
-    });
-    if (!result.success) {
-      await prisma.sentReminder.delete({ where: { id: claimed.id } });
-      return false;
-    }
-    await markCycleFollowupSent(prisma, cycle.id, now);
-    logger.info("cron", "Persistence follow-up SMS sent", {
-      sessionIdPrefix: session.id.slice(0, 8),
     });
     return true;
   }
@@ -352,7 +323,6 @@ async function sendResendForChannel(args: {
   label: string;
   openUrl: string;
   email: EmailProvider;
-  sms: ReturnType<typeof createMockSmsProvider>;
   push: ReturnType<typeof createWebPushProvider>;
   now: Date;
 }): Promise<boolean> {
@@ -365,13 +335,11 @@ async function sendResendForChannel(args: {
     label,
     openUrl,
     email,
-    sms,
     push,
     now,
   } = args;
 
   const emailAddress = primaryRecipientValue(session.recipients, "email");
-  const phoneNumber = primaryRecipientValue(session.recipients, "sms");
   const timezone = activeLocation(session.savedLocations)?.timezone ?? null;
 
   const pushSubscriptionId =
@@ -411,24 +379,6 @@ async function sendResendForChannel(args: {
       sessionIdPrefix: session.id.slice(0, 8),
       prayer: cycle.prayerName,
     });
-    return true;
-  }
-
-  if (channel === ReminderChannel.sms) {
-    if (!session.smsEnabled || !phoneNumber) {
-      await prisma.sentReminder.delete({ where: { id: claimed.id } });
-      return false;
-    }
-    const result = await sms.send(phoneNumber, body, {
-      sessionId: session.id,
-      prayerName: cycle.prayerName,
-      messageLogType: MESSAGE_TYPE.persistenceResend,
-    });
-    if (!result.success) {
-      await prisma.sentReminder.delete({ where: { id: claimed.id } });
-      return false;
-    }
-    await touchCycleAfterPersistenceSend(prisma, cycle.id, now);
     return true;
   }
 

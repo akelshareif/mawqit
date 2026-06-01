@@ -17,7 +17,6 @@ enum SessionStatus {
 
 enum ReminderChannel {
   email
-  sms
   calendar
   browser
 }
@@ -40,7 +39,6 @@ enum CronRunStatus {
 
 enum RecipientType {
   email
-  sms
 }
 
 enum SubscriptionTier {
@@ -62,7 +60,6 @@ model Session {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   emailEnabled                Boolean @default(false) @map("email_enabled")
-  smsEnabled                  Boolean @default(false) @map("sms_enabled")
   browserNotificationsEnabled Boolean @default(false) @map("browser_notifications_enabled")
 
   persistentReminders       Boolean @default(true) @map("persistent_reminders")
@@ -108,7 +105,7 @@ model SavedLocation {
   @@map("saved_locations")
 }
 
-/// Email/SMS recipient for a session; the `isPrimary` row is the default target.
+/// Email recipient for a session; the `isPrimary` row is the default target.
 /// One-to-many so premium can add more (free tier keeps a single primary row).
 model NotificationRecipient {
   id         String        @id @default(uuid())
@@ -168,7 +165,7 @@ model ReminderCycle {
   prayerName String          @map("prayer_name") @db.VarChar(32)
   prayerDate DateTime        @map("prayer_date") @db.Date
   /**
-   * Empty string for email/SMS; `push_subscriptions.id` for browser.
+   * Empty string for email; `push_subscriptions.id` for browser.
    */
   deviceKey  String          @default("") @map("device_key") @db.VarChar(64)
 

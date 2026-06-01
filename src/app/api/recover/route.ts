@@ -1,6 +1,6 @@
 import { getPrisma } from "@/lib/db";
 import { logger } from "@/lib/logger";
-import { normalizeEmail, normalizePhoneE164 } from "@/lib/normalize";
+import { normalizeEmail } from "@/lib/normalize";
 import { rateLimitOr429 } from "@/lib/rate-limit-api";
 import { allowRateLimit } from "@/lib/rate-limit-memory";
 import {
@@ -13,17 +13,14 @@ import { NextResponse } from "next/server";
 const IP_MAX_PER_MINUTE = 20;
 const CONTACT_MAX_PER_MINUTE = 8;
 
-function contactRateKey(channel: string, normalized: string): string {
-  return `api-recover-contact:${channel}:${normalized}`;
+function contactRateKey(normalized: string): string {
+  return `api-recover-contact:email:${normalized}`;
 }
 
-function logContactPrefix(channel: "email" | "sms", normalized: string): string {
-  if (channel === "email") {
-    const [local, domain] = normalized.split("@");
-    if (!domain) return "email:?";
-    return `email:${local?.slice(0, 2) ?? ""}…@${domain}`;
-  }
-  return `sms:${normalized.slice(0, 4)}…`;
+function logContactPrefix(normalized: string): string {
+  const [local, domain] = normalized.split("@");
+  if (!domain) return "email:?";
+  return `email:${local?.slice(0, 2) ?? ""}…@${domain}`;
 }
 
 export async function POST(req: Request) {
@@ -43,14 +40,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const channelRaw = (body as { channel?: unknown }).channel;
   const contactRaw = (body as { contact?: unknown }).contact;
-
-  if (channelRaw !== "email" && channelRaw !== "sms") {
-    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
-  }
-
-  const channel = channelRaw;
   const contact =
     typeof contactRaw === "string" ? contactRaw.trim() : "";
 
@@ -58,39 +48,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  let normalized: string;
-  if (channel === "email") {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) {
-      return NextResponse.json(
-        { error: "Enter a valid email address." },
-        { status: 400 },
-      );
-    }
-    normalized = normalizeEmail(contact);
-  } else {
-    try {
-      normalized = normalizePhoneE164(contact);
-    } catch {
-      return NextResponse.json(
-        {
-          error:
-            "Use a full international number with country code, e.g. +1234567890.",
-        },
-        { status: 400 },
-      );
-    }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) {
+    return NextResponse.json(
+      { error: "Enter a valid email address." },
+      { status: 400 },
+    );
   }
+  const normalized = normalizeEmail(contact);
 
-  if (!allowRateLimit(contactRateKey(channel, normalized), CONTACT_MAX_PER_MINUTE)) {
+  if (!allowRateLimit(contactRateKey(normalized), CONTACT_MAX_PER_MINUTE)) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
 
   const prisma = getPrisma();
-  const session = await findSessionForRecovery(prisma, channel, normalized);
+  const session = await findSessionForRecovery(prisma, normalized);
 
   logger.info("api", "POST /api/recover attempt", {
-    channel,
-    contactPrefix: logContactPrefix(channel, normalized),
+    contactPrefix: logContactPrefix(normalized),
     matched: Boolean(session),
   });
 
@@ -98,11 +72,10 @@ export async function POST(req: Request) {
     return NextResponse.json(GENERIC_RECOVER_RESPONSE_BODY);
   }
 
-  const ok = await sendRecoveryLink(prisma, session, channel, normalized);
+  const ok = await sendRecoveryLink(prisma, session, normalized);
   if (!ok) {
     logger.error("api", "POST /api/recover send failed", {
       sessionIdPrefix: session.id.slice(0, 8),
-      channel,
     });
     return NextResponse.json(
       { error: "Could not send. Try again later." },
@@ -112,7 +85,6 @@ export async function POST(req: Request) {
 
   logger.info("api", "POST /api/recover link sent", {
     sessionIdPrefix: session.id.slice(0, 8),
-    channel,
   });
 
   return NextResponse.json(GENERIC_RECOVER_RESPONSE_BODY);

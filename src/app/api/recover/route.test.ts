@@ -48,7 +48,6 @@ describe("POST /api/recover", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          channel: "email",
           contact: "nobody@example.com",
         }),
       }),
@@ -69,7 +68,6 @@ describe("POST /api/recover", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          channel: "email",
           contact: "User@Example.com",
         }),
       }),
@@ -80,7 +78,6 @@ describe("POST /api/recover", () => {
     expect(sendRecoveryLink).toHaveBeenCalledWith(
       expect.anything(),
       session,
-      "email",
       "user@example.com",
     );
   });
@@ -96,7 +93,6 @@ describe("POST /api/recover", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          channel: "email",
           contact: "user@example.com",
         }),
       }),
@@ -105,12 +101,12 @@ describe("POST /api/recover", () => {
     expect(res.status).toBe(503);
   });
 
-  it("rejects invalid channel", async () => {
+  it("rejects missing contact", async () => {
     const res = await POST(
       new Request("http://localhost/api/recover", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel: "fax", contact: "x@y.com" }),
+        body: JSON.stringify({}),
       }),
     );
     expect(res.status).toBe(400);
@@ -121,31 +117,27 @@ describe("POST /api/recover", () => {
       new Request("http://localhost/api/recover", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel: "email", contact: "not-an-email" }),
+        body: JSON.stringify({ contact: "not-an-email" }),
       }),
     );
     expect(res.status).toBe(400);
   });
 
-  it("uses SMS channel with E.164", async () => {
+  it("looks up the normalized email", async () => {
     vi.mocked(findSessionForRecovery).mockResolvedValue(null);
 
     const res = await POST(
       new Request("http://localhost/api/recover", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          channel: "sms",
-          contact: "+1 555 123 4567",
-        }),
+        body: JSON.stringify({ contact: "  User@Example.com " }),
       }),
     );
 
     expect(res.status).toBe(200);
     expect(findSessionForRecovery).toHaveBeenCalledWith(
       expect.anything(),
-      "sms",
-      "+15551234567",
+      "user@example.com",
     );
   });
 });

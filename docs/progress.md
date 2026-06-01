@@ -1,8 +1,8 @@
 # Mawqit progress
 
-**Last updated:** 2026-05-31 20:30
+**Last updated:** 2026-06-01 12:00
 **Current phase:** Phase 1 — Production hardening
-**Currently working on:** 1.4 complete and merged (PR #3) — migration applied to Neon (`prisma migrate status` = up to date). PRs #1/#2/#3 all merged to main (a053f87). Next per PLAN execution order: 1.1+1.2 (domain + inbound email), then 1.5 (observability), then 1.3/1.6/1.7/1.8.
+**Currently working on:** SMS cut from scope — removed entirely (code, schema, docs) on branch refactor/remove-sms (PR #5). 1.4 merged (PR #3) and applied to Neon. Next per PLAN: 1.1+1.2 (domain + inbound email) or pure-code items 1.3/1.7.
 **Blocked:** none
 
 ## Phase 0 — Exploratory pass and cleanup
@@ -27,7 +27,7 @@
 - [ ] 1.7 Rate limiting and abuse hardening
 - [ ] 1.8 Friends-and-family feedback channel
 
-## Phase 2 — Mawqit+ tier (no SMS yet)
+## Phase 2 — Mawqit+ tier
 
 - [ ] 2.1 Stripe foundation
 - [ ] 2.2 Checkout flow
@@ -39,14 +39,23 @@
 
 ## Phase 3 — Pre-public-launch
 
-- [ ] 3.1 SMS via Twilio
-- [ ] 3.2 SMS feature configuration
-- [ ] 3.3 i18n
-- [ ] 3.4 Marketing and SEO surface
-- [ ] 3.5 Pre-launch QA
-- [ ] 3.6 Masjid outreach kit
+- [ ] 3.1 i18n
+- [ ] 3.2 Marketing and SEO surface
+- [ ] 3.3 Pre-launch QA
+- [ ] 3.4 Masjid outreach kit
 
 ## Recent activity
+
+2026-06-01 — SMS cut from scope entirely (owner decision: A2P 10DLC overhead not worth
+              it for a solo launch; email + browser push cover the need). Removed on
+              branch refactor/remove-sms (PR #5): deleted providers/sms.ts +
+              normalizePhoneE164, made inbound/recover/persistence email-only, dropped
+              `sms` from the ReminderChannel + RecipientType enums and the
+              Session.sms_enabled column (migration 20260601000000_remove_sms — apply
+              with `prisma migrate dev`). Scrubbed living docs (CLAUDE.md anti-feature
+              #10 now "No SMS", PLAN.md Phase 3 renumbered, context docs). Historical
+              entries below + phase_0 summary left as-is. Verified: tsc 0, lint 0,
+              tests 100/100, build 0.
 
 2026-05-31 — Phase 1.4 merged and live. Owner applied the migration to Neon
               (`prisma migrate status` = up to date) and merged PR #3. PRs #1/#2/#3 all
@@ -143,8 +152,10 @@
 
 ## Blockers
 
-(empty — the 2026-05-31 Neon-unreachable blocker is resolved: owner applied the
-Phase 1.4 migration; `prisma migrate status` reports the schema up to date.)
+(The 2026-05-31 Neon-unreachable blocker is resolved: the Phase 1.4 migration was
+applied and `prisma migrate status` reports the schema up to date. **New:** the
+SMS-removal migration `20260601000000_remove_sms` (PR #5) must be applied to the DB
+with `prisma migrate dev`.)
 
 ## Open questions for the project owner
 
