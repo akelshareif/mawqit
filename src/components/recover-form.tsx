@@ -13,7 +13,6 @@ import { Label } from "@/components/ui/label";
 import { useState } from "react";
 
 export function RecoverForm() {
-  const channel = "email" as const;
   const [contact, setContact] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +27,7 @@ export function RecoverForm() {
       const res = await fetch("/api/recover", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel, contact }),
+        body: JSON.stringify({ contact }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         message?: string;

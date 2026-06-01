@@ -45,17 +45,4 @@ describe("parseSetupPayload", () => {
     });
     expect(r.ok).toBe(false);
   });
-
-  it("always clears SMS on save (not supported in UI)", () => {
-    const r = parseSetupPayload({
-      ...validBase,
-      smsEnabled: true,
-      phoneNumber: "+15551234567",
-    });
-    expect(r.ok).toBe(true);
-    if (r.ok) {
-      expect(r.data.smsEnabled).toBe(false);
-      expect(r.data.phoneNumber).toBeNull();
-    }
-  });
 });

@@ -9,7 +9,7 @@ type PageProps = { params: Promise<{ sessionId: string }> };
 
 function toInitial(session: {
   savedLocations: { latitude: number; longitude: number; timezone: string }[];
-  recipients: { type: "email" | "sms"; value: string; isPrimary: boolean }[];
+  recipients: { type: "email"; value: string; isPrimary: boolean }[];
   emailEnabled: boolean;
   browserNotificationsEnabled: boolean;
   persistentReminders: boolean;

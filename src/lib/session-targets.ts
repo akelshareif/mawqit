@@ -15,7 +15,7 @@ export function activeLocation<T extends LocationRow>(locations: T[]): T | null 
   return locations[0] ?? null;
 }
 
-/** The primary recipient value (email address or phone) for a channel, or null. */
+/** The primary recipient value (email address) for a type, or null. */
 export function primaryRecipientValue(
   recipients: RecipientRow[],
   type: RecipientType,

@@ -73,7 +73,6 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
         where: { id: sessionId },
         data: {
           emailEnabled: d.emailEnabled,
-          smsEnabled: d.smsEnabled,
           browserNotificationsEnabled: d.browserNotificationsEnabled,
           persistentReminders: d.persistentReminders,
           persistenceCadenceMinutes: d.persistenceCadenceMinutes,
@@ -104,16 +103,10 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
           data: { sessionId, type: "email", value: d.emailAddress, isPrimary: true },
         });
       }
-      if (d.smsEnabled && d.phoneNumber) {
-        await tx.notificationRecipient.create({
-          data: { sessionId, type: "sms", value: d.phoneNumber, isPrimary: true },
-        });
-      }
     });
 
     await syncChannelStatuses(prisma, sessionId, {
       emailEnabled: d.emailEnabled,
-      smsEnabled: d.smsEnabled,
       browserNotificationsEnabled: d.browserNotificationsEnabled,
     });
 
