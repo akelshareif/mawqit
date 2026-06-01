@@ -17,6 +17,8 @@ function toInitial(session: {
   followupEnabled: boolean;
   followupDelayMinutes: number;
   prayerMethod: string;
+  asrMethod: string;
+  highLatitudeRule: string;
 }): SetupFormInitial {
   const loc = activeLocation(session.savedLocations);
   return {
@@ -31,6 +33,8 @@ function toInitial(session: {
     followupEnabled: session.followupEnabled,
     followupDelayMinutes: session.followupDelayMinutes,
     prayerMethod: session.prayerMethod,
+    asrMethod: session.asrMethod,
+    highLatitudeRule: session.highLatitudeRule,
   };
 }
 

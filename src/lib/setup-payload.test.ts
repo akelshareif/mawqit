@@ -25,6 +25,38 @@ describe("parseSetupPayload", () => {
     }
   });
 
+  it("defaults asr method and high-latitude rule when omitted", () => {
+    const r = parseSetupPayload(validBase);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.asrMethod).toBe("standard");
+      expect(r.data.highLatitudeRule).toBe("middleofthenight");
+    }
+  });
+
+  it("accepts hanafi asr and a non-default high-latitude rule", () => {
+    const r = parseSetupPayload({
+      ...validBase,
+      asrMethod: "hanafi",
+      highLatitudeRule: "seventhofthenight",
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.asrMethod).toBe("hanafi");
+      expect(r.data.highLatitudeRule).toBe("seventhofthenight");
+    }
+  });
+
+  it("rejects an invalid asr method", () => {
+    const r = parseSetupPayload({ ...validBase, asrMethod: "jafari" });
+    expect(r.ok).toBe(false);
+  });
+
+  it("rejects an invalid high-latitude rule", () => {
+    const r = parseSetupPayload({ ...validBase, highLatitudeRule: "nonsense" });
+    expect(r.ok).toBe(false);
+  });
+
   it("rejects non-object body", () => {
     expect(parseSetupPayload(null).ok).toBe(false);
   });

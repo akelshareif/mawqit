@@ -5,6 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PRAYER_METHOD_OPTIONS } from "@/lib/prayer-method-options";
+import { ASR_METHOD_OPTIONS } from "@/lib/asr-method-options";
+import { HIGH_LATITUDE_OPTIONS } from "@/lib/high-latitude-options";
 import {
   CURATED_IANA_TIME_ZONES,
   groupTimeZonesByRegion,
@@ -39,6 +41,8 @@ export type SetupFormInitial = {
   followupEnabled: boolean;
   followupDelayMinutes: number;
   prayerMethod: string;
+  asrMethod: string;
+  highLatitudeRule: string;
 };
 
 type Props = {
@@ -92,6 +96,13 @@ export function SetupForm({
     String(initial.followupDelayMinutes),
   );
   const [prayerMethod, setPrayerMethod] = useState(initial.prayerMethod);
+  const [asrMethod, setAsrMethod] = useState(initial.asrMethod);
+  const [highLatitudeRule, setHighLatitudeRule] = useState(
+    initial.highLatitudeRule,
+  );
+  const [showAdvanced, setShowAdvanced] = useState(
+    initial.highLatitudeRule !== "middleofthenight",
+  );
   const [locPending, setLocPending] = useState(false);
 
   const [useCustomTimezone, setUseCustomTimezone] = useState(() => {
@@ -160,6 +171,8 @@ export function SetupForm({
       followupEnabled,
       followupDelayMinutes: Number.parseInt(followupDelayMinutes, 10),
       prayerMethod,
+      asrMethod,
+      highLatitudeRule,
     };
 
     try {
@@ -246,6 +259,8 @@ export function SetupForm({
         longitude={longitude}
         timezone={timezone}
         prayerMethod={prayerMethod}
+        asrMethod={asrMethod}
+        highLatitudeRule={highLatitudeRule}
       />
 
       <Card>
@@ -433,6 +448,71 @@ export function SetupForm({
                   </option>
                 ))}
               </select>
+            </div>
+
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium text-foreground">
+                Asr method
+              </legend>
+              <div className="flex flex-col gap-2 sm:flex-row sm:gap-4">
+                {ASR_METHOD_OPTIONS.map((opt) => (
+                  <label
+                    key={opt.value}
+                    className="flex flex-1 cursor-pointer items-start gap-2 rounded-lg border border-input bg-background px-3 py-2 text-sm has-checked:border-ring has-checked:ring-2 has-checked:ring-ring/20"
+                  >
+                    <input
+                      type="radio"
+                      name="asrMethod"
+                      value={opt.value}
+                      checked={asrMethod === opt.value}
+                      onChange={(e) => setAsrMethod(e.target.value)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="block font-medium text-foreground">
+                        {opt.label}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        {opt.description}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((v) => !v)}
+                className="text-sm font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                aria-expanded={showAdvanced}
+              >
+                {showAdvanced ? "Hide advanced" : "Advanced"}
+              </button>
+              {showAdvanced ? (
+                <div className="space-y-2 rounded-lg border border-dashed border-border/60 p-3">
+                  <Label htmlFor="highLatitudeRule">High-latitude rule</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Only affects far-northern/southern locations (above ~48°)
+                    where the sun doesn&apos;t reach the twilight angle for Fajr
+                    and Isha. Leave the default unless you know you need this.
+                  </p>
+                  <select
+                    id="highLatitudeRule"
+                    name="highLatitudeRule"
+                    value={highLatitudeRule}
+                    onChange={(e) => setHighLatitudeRule(e.target.value)}
+                    className="flex h-11 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20"
+                  >
+                    {HIGH_LATITUDE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
             </div>
           </div>
         </CardContent>

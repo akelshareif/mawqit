@@ -162,6 +162,8 @@ export async function handleInbound(
       longitude: loc?.longitude ?? null,
       timezone: loc?.timezone ?? null,
       prayerMethod: sess.prayerMethod,
+      asrMethod: sess.asrMethod,
+      highLatitudeRule: sess.highLatitudeRule,
     },
   });
 

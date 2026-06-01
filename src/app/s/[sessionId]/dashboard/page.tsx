@@ -125,18 +125,13 @@ export default async function DashboardPage({ params }: PageProps) {
     session.browserNotificationsEnabled && pushCount === 0;
 
   const tz = tzRaw;
-  const rows = getDayPrayerRows(
-    lat,
-    lng,
-    session.prayerMethod,
-    tz,
-  );
-  const next = getNextPrayer(
-    lat,
-    lng,
-    session.prayerMethod,
-    tz,
-  );
+  const calcOptions = {
+    prayerMethod: session.prayerMethod,
+    asrMethod: session.asrMethod,
+    highLatitudeRule: session.highLatitudeRule,
+  };
+  const rows = getDayPrayerRows(lat, lng, calcOptions, tz);
+  const next = getNextPrayer(lat, lng, calcOptions, tz);
   const link = sessionUrl(sessionId);
   const renewDays = daysUntilExpiry(session.expiresAt);
 
