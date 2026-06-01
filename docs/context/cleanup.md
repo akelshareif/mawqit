@@ -57,7 +57,7 @@ weren't are worth recording:
 
 - **No "dead export" removals.** A naive export-vs-import scan flagged ~13 symbols, but
   every one is actually used — within its own file (`EmailSendResult`, `SetupPayload`,
-  `WebPushSendResult`, the SMS provider types, etc.) or via an internal caller
+  `WebPushSendResult`, etc.) or via an internal caller
   (`createResendEmailProvider` is called by `createEmailProvider` in the same module).
   No exports were deleted.
 

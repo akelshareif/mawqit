@@ -19,13 +19,13 @@ So today, the only way an inbound STOP, HELP, or ack message can reach the datab
 ```ts
 handleInbound(
   prisma: PrismaClient,
-  channel: "email" | "sms",
+  channel: "email",
   fromRaw: string,
   bodyRaw: string,
 ): Promise<{ outcome: string }>
 ```
 
-The `channel` literal is restricted to `"email"` and `"sms"` — browser does not have an inbound notion at this layer. (Browser acks go through a separate API route, see "Browser ack vs inbound ack" below.)
+The `channel` literal is restricted to `"email"` (`type InboundChannel = "email"`) — browser does not have an inbound notion at this layer. (Browser acks go through a separate API route, see "Browser ack vs inbound ack" below.)
 
 ### Outcomes
 
@@ -33,8 +33,8 @@ The `channel` literal is restricted to `"email"` and `"sms"` — browser does no
 
 | Outcome | Meaning | Side effects |
 |---|---|---|
-| `invalid_address` | `normalizeEmail` / `normalizePhoneE164` rejected the `from` value | none |
-| `no_session` | No session found whose `emailAddress` / `phoneNumber` matches `from` | warn-log only; the inbound is silently dropped (no `message_log` row written) |
+| `invalid_address` | `normalizeEmail` rejected the `from` value | none (currently unreachable: `normalizeEmail` lowercases/trims and does not throw) |
+| `no_session` | No session found whose primary email recipient matches `from` | warn-log only; the inbound is silently dropped (no `message_log` row written) |
 | `stop` | Body trims+uppercases to `STOP` | `channel_status` upserted to `disabled=true`, outbound "stopped" reply sent, `message_log` row for the inbound + the outbound |
 | `help` | Body trims+uppercases to `HELP` | outbound HELP reply sent (session URL + Learn-to-Pray link + STOP/HELP help text) |
 | `empty` | Body is empty after `.trim()` | inbound logged but no reply, no state change |
@@ -44,9 +44,9 @@ The `channel` literal is restricted to `"email"` and `"sms"` — browser does no
 
 ### Address normalization and session lookup
 
-Email: `normalizeEmail(fromRaw)` lowercases and trims. Phone: `normalizePhoneE164(fromRaw)` strips whitespace and requires a leading `+` plus at least 8 chars. Both throw on invalid input → `invalid_address`.
+`normalizeEmail(fromRaw)` lowercases and trims the inbound `from` value.
 
-Session lookup is `findFirst({ where: { emailAddress: from } })` (or `phoneNumber`). The lookup is **case-sensitive** at the database level. **`normalizeEmail` runs only on the inbound side** — see flag #2 in "Things to revisit."
+Session lookup is a relational `findFirst` for the session whose primary email recipient (`notification_recipients`, `type='email'`, `is_primary=true`) has `value` equal to the normalized `from`. Both sides go through `normalizeEmail` — stored values are normalized on save — so the lookup matches reliably. See flag #2 in "Things to revisit."
 
 ### Inbound logging
 
@@ -66,9 +66,8 @@ Reply: STOP   (case-insensitive after .trim().toUpperCase())
 ```
 
 1. Upsert `channel_status` for `(sessionId, channel)` with `disabled=true, disabledAt=now()`. The single row is the source of truth — there's no append-only "STOP history."
-2. Send an outbound confirmation through the same channel: `"Notifications for email have been stopped."` or `"Notifications for SMS have been stopped."`
+2. Send an outbound confirmation: `"Notifications for email have been stopped."`
    - Email confirmations go through `createEmailProvider` — real Resend in production if `RESEND_API_KEY` + `RESEND_FROM` are set, otherwise mock.
-   - SMS confirmations go through `createMockSmsProvider` (always mock today).
 3. Return `outcome: "stop"`.
 
 The `channel_status` row gates **all** future cron passes for that channel on that session — initial sends, persistence resends, follow-ups, expiry reminders. See "Cron passes' channel-status reads" below.
@@ -107,10 +106,10 @@ These are two separate code paths:
 
 | | Browser ack | Inbound ack |
 |---|---|---|
-| Trigger | Service worker fetches `POST /api/sessions/[id]/reminders/ack` on notification interaction | User replies to an email or SMS reminder |
-| Channel(s) | `browser` only (route hard-rejects others) | `email`, `sms` |
+| Trigger | Service worker fetches `POST /api/sessions/[id]/reminders/ack` on notification interaction | User replies to an email reminder |
+| Channel(s) | `browser` only (route hard-rejects others) | `email` |
 | Selector | Exact match on `(session, channel='browser', prayerName, prayerDate, deviceKey)` | `findLatestOpenCycleForAck` — newest non-stale cycle for the channel |
-| Auth | Possession of session URL (browser already has it) + format check | Match between inbound `from` and stored `emailAddress`/`phoneNumber` |
+| Auth | Possession of session URL (browser already has it) + format check | Match between inbound `from` and the session's primary email recipient |
 | Outbound reply | None | "Got it" reply via the matching channel |
 
 Both update `reminder_cycles.ackReceived=true`. Both are idempotent — replaying the same ack returns success but with `updated: 0` (browser route) or `outcome: "no_active_cycle"` (inbound, since the cycle is now closed).
@@ -131,7 +130,7 @@ The cron passes only check `disabled=true` to skip a channel.
 
 There are exactly two writers:
 
-1. **[`syncChannelStatuses`](../../src/lib/session-channel-status.ts) — called on every session save** (`PATCH /api/sessions/[id]`). For each of `email`, `sms`, `browser`:
+1. **[`syncChannelStatuses`](../../src/lib/session-channel-status.ts) — called on every session save** (`PATCH /api/sessions/[id]`). For each of `email`, `browser`:
    - If `enabled=true` in the form → `upsert` to `(disabled=false, disabledAt=null)`. **This clears any prior STOP record.**
    - If `enabled=false` in the form → `deleteMany` for that `(session, channel)`. The row goes away entirely; any prior STOP timestamp is lost.
 
@@ -166,8 +165,7 @@ A user who never enabled email has `emailEnabled=false` and no `channel_status` 
 
 The STOP-confirmation, HELP-help, and ack-confirmation are sent through the same providers the cron uses:
 
-- Email reply → [`createEmailProvider`](../../src/lib/providers/email.ts). Real Resend in production if env is set; mock fallback otherwise (silent — see [`pipeline.md`](pipeline.md) flag #2).
-- SMS reply → [`createMockSmsProvider`](../../src/lib/providers/sms.ts). Always mock today; Phase 3 wires Twilio.
+- Email reply → [`createEmailProvider`](../../src/lib/providers/email.ts). Real Resend in production if env is set; mock fallback otherwise (silent — see [`pipeline.md`](pipeline.md) flag #1).
 
 Each outbound reply writes its own `message_log` row via the provider — direction `outbound`, type `stop_reply` / `help_reply` / `ack_reply` (the `OUTBOUND` constants in `handle-inbound.ts`, distinct from the `MESSAGE_TYPE` constants used by the cron).
 
@@ -175,7 +173,7 @@ Each outbound reply writes its own `message_log` row via the provider — direct
 
 1. **No real inbound webhook is wired.** Phase 1.2 will land `/api/inbound/email` connected to Resend. The signature-verification and idempotency-key handling for Resend webhook events doesn't exist anywhere in the repo today — both will need to be written from scratch.
 
-2. ~~**Inbound `from` is normalized but stored values may not be.**~~ **Correction (verified during 0.5):** stored emails *are* normalized. [`parseSetupPayload`](../../src/lib/setup-payload.ts) calls `normalizeEmail` on every save, so both sides of the lookup go through the same lowercase+trim. No mismatch risk. Phone normalization is moot — see flag #10. Leaving the strikethrough as a record of the verification.
+2. ~~**Inbound `from` is normalized but stored values may not be.**~~ **Correction (verified during 0.5):** stored emails *are* normalized. [`parseSetupPayload`](../../src/lib/setup-payload.ts) calls `normalizeEmail` on every save, so both sides of the lookup go through the same lowercase+trim. No mismatch risk. Leaving the strikethrough as a record of the verification.
 
 3. **Single-row model for STOP loses history.** When a user re-enables a channel via the UI, the STOP timestamp is overwritten. The inbound itself remains in `message_log` so nothing is permanently gone, but support tooling that asks "when did this user STOP?" needs to query `message_log` for `type='inbound_message'` and `body ILIKE 'stop'`, not `channel_status.disabledAt`. Documenting so Phase 1.5 (admin page) doesn't trust `disabledAt` as an authoritative timestamp.
 
@@ -190,5 +188,3 @@ Each outbound reply writes its own `message_log` row via the provider — direct
 8. **`OUTBOUND` constants are local to `handle-inbound.ts`.** They duplicate the pattern in `MESSAGE_TYPE` ([`message-types.ts`](../../src/lib/message-types.ts)). When inbound becomes real (Phase 1.2), consider moving them into `MESSAGE_TYPE` so `message_log.type` has a single canonical taxonomy. Not Phase 0 work — flag for Phase 1.2.
 
 9. **Unused `body` field in inbound `message_log`.** The inbound message body is stored in `message_log.body` (truncated to 8000 chars). PII consideration: an inbound HELP from a real email may contain auto-quoted prior reminder text, which contains the recipient address again. The truncation is fine, the storage is fine, but the admin page (Phase 1.5) needs to keep this row out of cleartext display. Already flagged in [`schema.md`](schema.md) #4 — restating here in the inbound context.
-
-10. **SMS inbound is dead code today.** [`parseSetupPayload`](../../src/lib/setup-payload.ts:89-90) **hard-codes `smsEnabled = false` and `phoneNumber = null`** on every save. So no session created or modified through the normal UI flow ever has a `phoneNumber`. An inbound SMS reaching `handleInbound` would match zero sessions and return `no_session`. The SMS branch of `handleInbound` is reachable only if a session's `phoneNumber` is set out-of-band (direct DB manipulation, or a future code path). This complements the "no `runSmsReminderPass`" finding in [`pipeline.md`](pipeline.md) flag #1 — the entire SMS surface is structurally dormant until Phase 3 wires both ends.

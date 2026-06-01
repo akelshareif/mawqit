@@ -25,6 +25,7 @@ Documenting these so they don't creep in:
 - Family plans
 - Native mobile apps
 - Streak tracking, completion verification, or any gamification
+- SMS delivery (cut 2026-06-01 — A2P 10DLC overhead not justified; email + push cover it)
 - WhatsApp delivery
 - Calendar two-way sync (only outbound .ics feed)
 - Adhan audio in browser push (defer to v1.1)
@@ -39,7 +40,6 @@ Locked in for v1 paid tier:
 3. Extended session validity (180 days vs 30)
 4. Multi-location (up to 3 saved locations, one active)
 5. Multi-recipient email (up to 3 email addresses)
-6. **SMS reminders** with smart per-prayer toggle and 100/month hard cap (ships in Phase 3)
 
 ---
 
@@ -69,7 +69,7 @@ This phase exists because every later phase makes assumptions about where code l
 ### 0.4 Inbound and channel logic
 - Find `handleInbound` and document what STOP, HELP, and generic-ack do today
 - Note exactly where it is wired (debug simulator only? real webhook?)
-- Document the channel-status model (per-session toggles for email, push, future SMS)
+- Document the channel-status model (per-session toggles for email and push)
 
 ### 0.5 Test coverage map
 - Run `npm test` and capture output
@@ -159,7 +159,7 @@ New tables:
 
 - `subscriptions` — one-to-one with session: `stripe_customer_id`, `stripe_subscription_id` (nullable, since we use one-time payments), `tier`, `status`, `period_end`, `last_renewed_at`
 - `saved_locations` — one-to-many from session: `name`, `lat`, `lng`, `timezone`, `is_active`
-- `notification_recipients` — one-to-many from session: `type` (email | sms), `value`, `is_primary`, `verified_at`
+- `notification_recipients` — one-to-many from session: `type` (email), `value`, `is_primary`, `verified_at`
 - `donations` — log only: `stripe_session_id`, `amount`, `currency`, `created_at`
 
 Migrate existing single-value email and location fields onto the new tables as the primary/active row. Maintain backward compatibility during the rollout.
@@ -199,7 +199,7 @@ At least 5 friends-and-family users on the system for 2+ weeks with no critical 
 
 ---
 
-## Phase 2: Mawqit+ tier (no SMS yet)
+## Phase 2: Mawqit+ tier
 
 **Goal:** Users can pay for Mawqit+ via Stripe, premium features unlock immediately, the affirmative renewal flow works end-to-end, and donations are accepted.
 
@@ -294,31 +294,20 @@ At least 5 friends-and-family users have completed the upgrade flow successfully
 
 ## Phase 3: Pre-public-launch
 
-### 3.1 SMS via Twilio
-- A2P 10DLC: Sole Proprietor Brand registration (~$4.50 one-time), low-volume campaign vetting (~$15 one-time + ~$2/mo)
-- Local 10DLC phone number (~$1.15/mo)
-- `WEB_SMS_MODE=mock|real` env var matching the existing email/push pattern
-- `handleInbound` extended for Twilio inbound webhook (STOP and HELP via SMS)
-- Phone number verification flow (send OTP, confirm before reminders fire)
-- A2P 10DLC compliance language in setup ("Reply STOP to unsubscribe, HELP for help, msg & data rates may apply")
-- **Done means:** registered campaign approved by carriers, real SMS sends to a real phone
+> **SMS was cut from scope (2026-06-01).** The original plan had SMS as Phase 3.1/3.2
+> (Twilio + A2P 10DLC). It's been removed entirely — the carrier-registration overhead
+> isn't justified for a solo launch, and email + browser push cover the need. If SMS is
+> ever requested post-launch it returns as its own scoped feature. The remaining Phase 3
+> items below are unchanged.
 
-### 3.2 SMS feature configuration
-- Per-prayer SMS toggle in setup
-- Hard cap: 100 SMS sent per calendar month per session
-- When cap is hit, SMS is skipped silently; reminder still goes via email or push if enabled
-- Persistence resends and follow-ups never use SMS — always email or push
-- Multi-phone (up to 2 phones on premium) within the shared 100/mo cap
-- **Done means:** capped user past 100 sends in a month receives 0 additional SMS but reminders still fire via other channels
-
-### 3.3 i18n
+### 3.1 i18n
 - next-intl or similar
 - Languages for v1: English, Arabic (RTL), Urdu
 - Translate UI strings, email templates, push notification copy, ICS calendar event titles
 - Hijri date display (now serves both UI and premium calendar feed)
 - **Done means:** user can switch language in settings, all reminder content arrives in chosen language
 
-### 3.4 Marketing and SEO surface
+### 3.2 Marketing and SEO surface
 - Landing page polish (current is functional, not marketing-grade)
 - FAQ page (especially: "why do I need to confirm renewal?", "is my data safe?", "what if I lose my link?")
 - Comparison page (Mawqit vs other prayer apps — emphasize web-first, no app, no tracking)
@@ -326,17 +315,16 @@ At least 5 friends-and-family users have completed the upgrade flow successfully
 - Meta tags, sitemap, robots.txt
 - Plausible analytics (already in env vars) — privacy-respecting
 
-### 3.5 Pre-launch QA
+### 3.3 Pre-launch QA
 - Manual QA against full README checklist
 - Stripe test cards across all 4 sub durations and the renewal flow
 - Inbound email STOP/HELP end-to-end on real domain from Gmail, Outlook, iCloud
-- Inbound SMS STOP/HELP end-to-end
 - Cron load test at 100, 500, 1000 sessions
 - Session expiry warning emails
 - Downgrade-on-non-renewal preserves user settings
 - **Done means:** signed-off QA log with each scenario tested
 
-### 3.6 Masjid outreach kit
+### 3.4 Masjid outreach kit
 - One-page PDF describing Mawqit for imams (the term paper is most of this)
 - Bulk discount codes (e.g., 50% off yearly for masjid members)
 - Email template for masjid admins to forward to members
@@ -353,4 +341,4 @@ At least 5 friends-and-family users have completed the upgrade flow successfully
 6. **Pause for friends-and-family run. Do not skip this gate.**
 7. Phase 2.1 → 2.6 in tight loop.
 8. **Pause for paid friends-and-family run.**
-9. Phase 3 in order. SMS last because A2P registration takes 10–15 days carrier review.
+9. Phase 3 in order.

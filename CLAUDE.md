@@ -2,7 +2,7 @@
 
 You are working on **Mawqit**, a web-first prayer reminder system for the five daily Muslim prayers. The project started as a CS-6795 (Cognitive Science) class project at Georgia Tech and is being migrated to a production app at `mawqit.app` with a free tier (Mawqit) and paid tier (Mawqit+).
 
-The product thesis is grounded in cognitive science: task-initiation failures for time-sensitive recurring rituals are usually a problem of cognitive support, not motivation. The app reduces friction by delivering reminders through channels users already occupy (email, browser push, eventually SMS), avoiding context switching, and keeping responses lightweight. Anonymous session links are used in place of accounts.
+The product thesis is grounded in cognitive science: task-initiation failures for time-sensitive recurring rituals are usually a problem of cognitive support, not motivation. The app reduces friction by delivering reminders through channels users already occupy (email and browser push), avoiding context switching, and keeping responses lightweight. Anonymous session links are used in place of accounts.
 
 This thesis is load-bearing. Several common SaaS patterns are off the table because they violate it. **Read "Anti-features" below before suggesting any feature.**
 
@@ -35,7 +35,7 @@ These violate the cognitive-science thesis or the product's privacy/anonymity po
 7. **No required accounts.** The anonymous session model is locked in across both tiers.
 8. **No engagement-driving notifications** ("we miss you", "come back", weekly digests, etc.). Reminders are for prayer times only.
 9. **No paywall on the act of being reminded to pray.** Free tier always sends prayer reminders. Premium adds convenience and customization, never withholds the core function.
-10. **No SMS in Phase 1 or Phase 2.** SMS comes in Phase 3, requires A2P 10DLC, and has a 100/month hard cap.
+10. **No SMS.** SMS was cut from scope (2026-06-01) — the A2P 10DLC carrier registration is disproportionate overhead for a solo launch, and email + browser push cover the need. The channel is not built and should not be reintroduced without an explicit decision to take it back on. If it ever returns, it's a post-launch feature requiring its own scoping.
 
 If a request would create one of these, push back. The user has explicitly said the app should not become "another prayer tracker."
 
@@ -72,10 +72,10 @@ These apply to every action you take in this repo:
 - **Comments explain *why*, not *what*.** If a comment restates the code, delete it. TypeScript types and good names carry the documentation.
 - **Conventional Commits format.** `<type>(<scope>): <description>`. Examples: `feat(cron): add affirmative renewal flow`, `fix(inbound): verify Resend webhook signature`.
 - **Tests ship with the code.** No PR without tests except pure docs/config changes.
-- **Mock modes are sacred.** `WEB_PUSH_MODE`, `EMAIL_FORCE_MOCK`, and the future `WEB_SMS_MODE` exist so the cron pipeline can be exercised without paying for real sends. Never bypass them. Never write code that calls a real provider when in mock mode.
+- **Mock modes are sacred.** `WEB_PUSH_MODE` and `EMAIL_FORCE_MOCK` exist so the cron pipeline can be exercised without paying for real sends. Never bypass them. Never write code that calls a real provider when in mock mode.
 - **Idempotency is sacred.** The send ledger prevents duplicate reminders when the cron runs more than once. Never write a code path that sends without first checking the ledger.
 - **Never expose debug routes in production.** `ENABLE_DEBUG_TOOLS=false` is the production default. Don't ship code that bypasses this.
-- **Never log PII at info or debug level.** Recipient emails, phone numbers, and session IDs are sensitive. Hash, partial-mask, or omit.
+- **Never log PII at info or debug level.** Recipient emails and session IDs are sensitive. Hash, partial-mask, or omit.
 - **Never commit secrets.** Never log them either, even at debug level.
 - **Never force-push to `main`.** Never bypass CI. Never disable failing tests with `it.skip` or `describe.skip`.
 - **When the docs are ambiguous and the cost of being wrong is high, ask first.** When the cost is low and the choice is reversible, proceed and document the assumption in the PR description and the activity log.

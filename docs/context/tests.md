@@ -11,8 +11,8 @@ $ npm test
 
  RUN  v4.1.2 /Users/ake/Code/mawqit
 
- Test Files  38 passed (38)
-      Tests  107 passed (107)
+ Test Files  37 passed (37)
+      Tests  100 passed (100)
    Duration  ~1.25s
 ```
 
@@ -23,7 +23,7 @@ All tests pass. No flaky tests. No `it.skip` / `describe.skip`. The suite is fas
 - **Vitest 4** ([`vitest.config.ts`](../../vitest.config.ts), [`vitest.setup.ts`](../../vitest.setup.ts)).
 - **jsdom** environment for the React component tests; node for everything else (vitest auto-picks based on file shape).
 - **`@testing-library/react`** + **`@testing-library/jest-dom`** matchers, registered in [`vitest.setup.ts`](../../vitest.setup.ts).
-- Prisma is mocked per-test with hand-written `vi.fn()` stubs — never an in-memory DB, never a real DB. The same applies to Resend, web-push, and Twilio (which is mock-only anyway).
+- Prisma is mocked per-test with hand-written `vi.fn()` stubs — never an in-memory DB, never a real DB. The same applies to Resend and web-push.
 
 ## Coverage by area
 
@@ -44,7 +44,7 @@ The cron-pass tests are smoke tests that prove the function executes against a s
 
 | Source | Test | What's covered |
 |---|---|---|
-| `lib/inbound/handle-inbound.ts` | `handle-inbound.test.ts` | 5 cases: invalid SMS address, no-session, STOP-email happy path, empty body, no-active-cycle. **Not covered:** HELP, generic-ack happy path, SMS STOP, no-timezone, outbound reply provider integration. |
+| `lib/inbound/handle-inbound.ts` | `handle-inbound.test.ts` | 4 cases: no-session, STOP-email happy path, empty body, no-active-cycle. **Not covered:** HELP, generic-ack happy path, no-timezone, outbound reply provider integration. |
 | `app/api/debug/simulate-inbound/route.ts` | `simulate-inbound/route.test.ts` | One case: 404 when debug tools disabled. **No happy-path through to `handleInbound`.** |
 
 ### Providers
@@ -52,7 +52,6 @@ The cron-pass tests are smoke tests that prove the function executes against a s
 | Source | Test | What's covered |
 |---|---|---|
 | `lib/providers/email.ts` | `providers/email.test.ts` | One case: `createMockEmailProvider` writes a `message_log` row. **`createResendEmailProvider` is not tested.** |
-| `lib/providers/sms.ts` | `providers/sms.test.ts` | One case: mock writes `message_log`. (No real provider exists yet.) |
 | `lib/providers/web-push.ts` | `providers/web-push.test.ts` | One case: mock mode writes `message_log` only. **The real path (incl. 410/404 → `gone: true`) is not tested.** |
 
 ### API routes
@@ -62,7 +61,7 @@ The cron-pass tests are smoke tests that prove the function executes against a s
 | `POST /api/sessions` | `sessions/route.test.ts` | Happy-path session create only. No rate-limit assertion. |
 | `GET /api/sessions/[id]` | `sessions/[sessionId]/route.test.ts` | 404 + happy path |
 | `DELETE /api/sessions/[id]` | same file | 404 invalid id, success, 404 not-found |
-| `POST /api/recover` | `api/recover/route.test.ts` | 6 cases — generic-message, success, send-failure, invalid channel, invalid email, SMS+E.164. The most thoroughly tested route. |
+| `POST /api/recover` | `api/recover/route.test.ts` | 6 cases — generic-message, success, send-failure, missing-contact, invalid-email, normalized-email-lookup. The most thoroughly tested route. |
 | `GET /api/health` | `api/health/route.test.ts` | DB-skipped, query-success, query-fails-503 |
 | `GET /api/push/vapid-public-key` | same dir | 503 when missing, key when set |
 | `POST /api/sessions/[id]/reminders/ack` | **none** | **Untested.** Browser ack route. |
@@ -97,19 +96,19 @@ Solid coverage:
 | `lib/cron-auth.ts` | unset / exact match / wrong-token / length-mismatch |
 | `lib/env.ts` | every env getter has at least one test |
 | `lib/log-sanitize.ts` | redaction, UUID truncation, opaque-string redaction |
-| `lib/normalize.ts` | email + E.164 happy and failure paths |
+| `lib/normalize.ts` | email normalization happy and failure paths |
 | `lib/prayer-method-options.ts` | known values + `isAllowedPrayerMethod` |
 | `lib/prayer-preview.ts` | parse failures + happy path |
 | `lib/prayer-times.ts` | **method maps + `resolvePrayerDate` only** — see "Gaps" |
 | `lib/public-url.ts` | base-URL precedence, trailing-slash strip, `sessionUrl` |
 | `lib/rate-limit-api.ts` | allowed / 429 |
 | `lib/rate-limit-memory.ts` | window count + reset |
-| `lib/recover-session.ts` | lookup-by-email/phone, message_log writes |
+| `lib/recover-session.ts` | lookup-by-email, message_log writes |
 | `lib/reminders/prayer-reminder-common.ts` | next-key-after, label, time-for-key, SALAH_KEYS length |
 | `lib/request-ip.ts` | x-forwarded-for / x-real-ip / unknown |
 | `lib/session-has-location.ts` | true/false branches |
 | `lib/session-id.ts` | UUID format accept/reject |
-| `lib/setup-payload.ts` | valid, non-object, no channel, invalid cadence, SMS-always-cleared |
+| `lib/setup-payload.ts` | valid, non-object, no channel, invalid cadence |
 | `lib/utils.ts` | `cn` merge + tailwind conflict |
 
 ### Lib without tests
@@ -160,19 +159,19 @@ These aren't called out by name in PLAN.md, but they'll surface in Phase 1 or 2 
 
 5. **No test for `syncChannelStatuses`.** The dual-writer interaction with `handleInbound` is documented in [`inbound.md`](inbound.md) but untested. The "user re-enables in UI clears prior STOP" semantics is non-obvious and would be easy to break.
 
-6. **No test for the `/api/sessions/[id]/reminders/ack` browser-ack route.** The route is the user-visible end of the persistence/ack contract. Phase 2 multi-recipient and Phase 3 SMS will touch the ack flow; coverage now would prevent regressions.
+6. **No test for the `/api/sessions/[id]/reminders/ack` browser-ack route.** The route is the user-visible end of the persistence/ack contract. Phase 2 multi-recipient will touch the ack flow; coverage now would prevent regressions.
 
 7. **No test for `PATCH /api/sessions/[id]`.** The `parseSetupPayload` unit tests cover validation, but they don't cover `syncChannelStatuses` getting called with the right flags, the `expiresAt` recomputation, the `expiry*SentAt` reset, or the rate limiter. One integration-shaped test would cover all four.
 
 8. **No test for push subscribe / unsubscribe.** Both are simple routes, but they read JSON, do a DB write, and write a `push_subscriptions` row. A regression in either silently breaks the browser-push setup flow.
 
-9. **`createResendEmailProvider` is untested.** Unit-testing it requires mocking the Resend SDK (`new Resend(apiKey).emails.send`). The error-shape parsing in [lines 86-92](../../src/lib/providers/email.ts) is the most fragile bit — flagged in [`pipeline.md`](pipeline.md) #8 as well.
+9. **`createResendEmailProvider` is untested.** Unit-testing it requires mocking the Resend SDK (`new Resend(apiKey).emails.send`). The error-shape parsing in [lines 86-92](../../src/lib/providers/email.ts) is the most fragile bit — flagged in [`pipeline.md`](pipeline.md) #6 as well.
 
 ## Things to revisit
 
 1. **The cron-pass test files exist but are token coverage.** They claim to test the function but only assert the trivial empty-input case. A reader who sees `run-email-reminders.test.ts` in the file list would assume the email pass is covered. It's not, materially. Phase 1.5 needs to either expand them or replace them.
 
-2. **No integration tests in the suite.** Everything is unit + mocks. This is fine for now (the mocks are honest about what they replace), but it means a regression in the wiring between the route, the lib, and Prisma can pass all 107 tests and still ship broken. Phase 1.5 might consider one or two end-to-end tests using a Postgres test container, even if the unit-test posture stays the default.
+2. **No integration tests in the suite.** Everything is unit + mocks. This is fine for now (the mocks are honest about what they replace), but it means a regression in the wiring between the route, the lib, and Prisma can pass all 100 tests and still ship broken. Phase 1.5 might consider one or two end-to-end tests using a Postgres test container, even if the unit-test posture stays the default.
 
 3. **No coverage report.** `vitest run --coverage` isn't configured. Adding it would make these gaps quantitative. Could be a 0.7 cleanup target if you want it before Phase 1, or a Phase 1.5 task as part of observability.
 

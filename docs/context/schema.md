@@ -12,15 +12,15 @@ Snapshot of the Mawqit Postgres schema. Source of truth: [`prisma/schema.prisma`
 | Enum | Values |
 |---|---|
 | `SessionStatus` | `active`, `expired` |
-| `ReminderChannel` | `email`, `sms`, `calendar`, `browser` |
+| `ReminderChannel` | `email`, `calendar`, `browser` |
 | `MessageDirection` | `outbound`, `inbound` |
 | `MessageDeliveryStatus` | `sent`, `failed` |
 | `CronRunStatus` | `running`, `success`, `error` |
-| `RecipientType` | `email`, `sms` *(Phase 1.4)* |
+| `RecipientType` | `email` *(Phase 1.4)* |
 | `SubscriptionTier` | `monthly`, `quarterly`, `semiannual`, `yearly` *(Phase 1.4)* |
 | `SubscriptionStatus` | `active`, `expired` *(Phase 1.4)* |
 
-`sms` and `calendar` already exist in `ReminderChannel` even though SMS is a Phase 3 feature and the `.ics` calendar feed is Phase 2.5. Treat as intentional groundwork; do not remove.
+`calendar` already exists in `ReminderChannel` even though the `.ics` calendar feed is Phase 2.5. Treat as intentional groundwork; do not remove.
 
 ## Models
 
@@ -36,7 +36,6 @@ The shareable-link credential. The session ID itself is the auth — anyone with
 | `createdAt` | `created_at` | `timestamp(3)` | default `now()` |
 | `updatedAt` | `updated_at` | `timestamp(3)` | `@updatedAt` |
 | `emailEnabled` | `email_enabled` | `boolean` | default `false` |
-| `smsEnabled` | `sms_enabled` | `boolean` | default `false`; channel exists in schema, real sends Phase 3 |
 | `browserNotificationsEnabled` | `browser_notifications_enabled` | `boolean` | default `false` |
 
 > *Phase 1.4 removed `latitude`, `longitude`, `timezone`, `email_address`, and
@@ -67,7 +66,7 @@ One row per (session, channel, prayer, day, device). Tracks the lifecycle of a s
 | `channel` | `channel` | `ReminderChannel` | |
 | `prayerName` | `prayer_name` | `varchar(32)` | e.g. "fajr", "dhuhr"… |
 | `prayerDate` | `prayer_date` | `date` | calendar day in the session's local timezone (no time component) |
-| `deviceKey` | `device_key` | `varchar(64)` | default `''`. Empty for email/SMS; equals `push_subscriptions.id` for browser |
+| `deviceKey` | `device_key` | `varchar(64)` | default `''`. Empty for email; equals `push_subscriptions.id` for browser |
 | `ackReceived` | `ack_received` | `boolean` | default `false` |
 | `followupSent` | `followup_sent` | `boolean` | default `false` |
 | `resendCount` | `resend_count` | `integer` | default `0` |
@@ -122,7 +121,7 @@ Audit trail of every message in or out, both successes and failures. Mock-mode e
 | `prayerName` | `prayer_name` | `varchar(32)?` | nullable — not all messages relate to a prayer |
 | `type` | `type` | `varchar(64)` | e.g. `prayer_reminder`, `recovery_link`, `expiry_warning`, `inbound_stop` |
 | `direction` | `direction` | `MessageDirection` | `outbound` or `inbound` |
-| `to` | `to` | `varchar(320)` | email or phone (this is PII; never log to stdout at info/debug) |
+| `to` | `to` | `varchar(320)` | email (this is PII; never log to stdout at info/debug) |
 | `body` | `body` | `text?` | message body if applicable |
 | `status` | `status` | `MessageDeliveryStatus` | `sent` or `failed` |
 | `errorMessage` | `error_message` | `text?` | provider error string |
@@ -149,10 +148,10 @@ Indexes:
 - PK on `id`
 - Index on `session_id`
 - **Two partial unique indexes for idempotency** — written directly in raw SQL inside the `slice4_cron_email` migration:
-  - `sent_reminders_nonpush_channels_unique` on `(session_id, prayer_name, prayer_date, channel, message_type)` `WHERE channel IN ('email','sms','calendar') AND push_subscription_id IS NULL`
+  - `sent_reminders_nonpush_channels_unique` on `(session_id, prayer_name, prayer_date, channel, message_type)` `WHERE channel IN ('email','calendar') AND push_subscription_id IS NULL`
   - `sent_reminders_browser_push_unique` on `(session_id, prayer_name, prayer_date, message_type, push_subscription_id)` `WHERE channel = 'browser' AND push_subscription_id IS NOT NULL`
 
-The split exists because browser sends are per-device (one user can have multiple subscriptions), while email/SMS/calendar are per-session.
+The split exists because browser sends are per-device (one user can have multiple subscriptions), while email/calendar are per-session.
 
 ### `CronRun` → table `cron_runs`
 
@@ -180,7 +179,7 @@ Indexes: PK on `id`, index on `session_id`.
 
 ### `NotificationRecipient` → table `notification_recipients` *(Phase 1.4)*
 
-A session's email/SMS targets. The `is_primary = true` row (per `type`) is the default
+A session's email recipients. The `is_primary = true` row (per `type`) is the default
 target. One-to-many so premium can add more; free tier keeps a single primary row per
 channel. Columns: `type` (`RecipientType`), `value` (`varchar(320)`, PII), `is_primary`
 (`boolean`), `verified_at` (`timestamptz?`, for the Phase 2.5 verification flow), plus
@@ -247,7 +246,6 @@ columns dropped outright) rather than the keep-then-drop rollout PLAN §1.4 sket
 | Old `sessions` column | New home |
 |---|---|
 | `email_address` | `notification_recipients`, `type='email'`, `is_primary=true` |
-| `phone_number` | `notification_recipients`, `type='sms'`, `is_primary=true` |
 | `latitude`, `longitude`, `timezone` | `saved_locations`, `is_active=true` |
 | (Stripe identity — none before) | `subscriptions` (1:1, used from Phase 2) |
 | (Donation events — none before) | `donations` (no session link, used from Phase 2.6) |
@@ -274,6 +272,7 @@ Migrations are in [`prisma/migrations/`](../../prisma/migrations/). Each is a di
 | 5 | `20260330120000_slice7_reminder_cycles` | Creates `reminder_cycles` with the composite unique constraint that defines a cycle |
 | 6 | `20260406202035_slice7` | Renames a single index on `reminder_cycles` (cosmetic — Prisma rename to fit Postgres' 63-char identifier limit). No schema-shape change. |
 | 7 | `20260531120000_phase_1_4_schema` | **Phase 1.4.** Drops `latitude`, `longitude`, `timezone`, `email_address`, `phone_number` from `sessions`. Adds enums `RecipientType`, `SubscriptionTier`, `SubscriptionStatus`. Creates `saved_locations`, `notification_recipients` (both cascade), `subscriptions` (FK `SET NULL` + `deleted_at`), `donations` (no session link). Authored offline via `prisma migrate diff`; apply with `prisma migrate dev`. |
+| 8 | `20260601000000_remove_sms` | **SMS removal (2026-06-01).** Drops sms from ReminderChannel and RecipientType enums; drops Session.sms_enabled. |
 
 `migration_lock.toml` pins the provider to `postgresql`.
 
@@ -285,7 +284,7 @@ Migrations are in [`prisma/migrations/`](../../prisma/migrations/). Each is a di
 
 3. **`slice7` migration is a pure index rename.** No model change. If it ever becomes a problem (e.g., we squash early migrations for a fresh start), this one is safe to fold in.
 
-4. **`message_log.body` stores PII.** The recipient's email goes in `to`; the message body may include the recipient's email or phone. Whatever Phase 1.6 (Privacy Policy) and Phase 1.5 (admin page) build on top of `message_log` must respect this — the admin page must not display `to` or `body` in cleartext. Flagging for those phases.
+4. **`message_log.body` stores PII.** The recipient's email goes in `to`; the message body may include the recipient's email. Whatever Phase 1.6 (Privacy Policy) and Phase 1.5 (admin page) build on top of `message_log` must respect this — the admin page must not display `to` or `body` in cleartext. Flagging for those phases.
 
 5. **`SentReminder.pushSubscriptionId → SET NULL`** is the right choice (preserves the ledger after a device unsubscribes), but it does mean a future re-subscribe of the same device — which gets a new `push_subscriptions.id` — will see no ledger row and could re-send the same prayer. Acceptable: a re-subscribe is a deliberate action, not an accidental retry. Documenting so future debugging doesn't panic about it.
 

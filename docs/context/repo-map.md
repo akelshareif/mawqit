@@ -115,7 +115,7 @@ The `setup` and `settings` pages share the exact same form component (`SetupForm
 | `POST /api/push/subscribe` | `api/push/subscribe/route.ts` | rate-limited | Register a Web Push subscription for a session |
 | `POST /api/push/unsubscribe` | `api/push/unsubscribe/route.ts` | rate-limited | Remove a Web Push subscription |
 | `GET /api/push/vapid-public-key` | `api/push/vapid-public-key/route.ts` | none | Returns `NEXT_PUBLIC_VAPID_PUBLIC_KEY` for `PushManager.subscribe` |
-| `POST /api/recover` | `api/recover/route.ts` | rate-limited (20/min/IP, 8/min/contact) | Send recovery link to email/phone associated with a session |
+| `POST /api/recover` | `api/recover/route.ts` | rate-limited (20/min/IP, 8/min/contact) | Send recovery link to the email on a session |
 | `GET /api/health` | `api/health/route.ts` | none | Liveness check; runs `SELECT 1` against Postgres |
 | **Cron** | | | |
 | `GET /api/cron/reminders` | `api/cron/reminders/route.ts` | `Authorization: Bearer $CRON_SECRET` via `verifyCronSecret` | Drives the entire reminder pipeline. Runs four passes: browser, email, persistence, expiry. Externally scheduled (no built-in scheduler). |
@@ -176,7 +176,7 @@ For a full per-file purpose, see `pipeline.md` (Phase 0.3) and `inbound.md` (Pha
 - `lib/cron-auth.ts` — `verifyCronSecret`.
 - `lib/prayer-times.ts` + `prayer-preview.ts` + `prayer-method-options.ts` — adhan-backed prayer computation.
 - `lib/calendar-date.ts` — UTC ↔ ymd helpers.
-- `lib/normalize.ts` — email/phone normalization.
+- `lib/normalize.ts` — email normalization.
 - `lib/setup-payload.ts` — parse/validate setup form payloads.
 - `lib/session-id.ts`, `lib/session-channel-status.ts`, `lib/session-has-location.ts` — session helpers.
 - `lib/recover-session.ts` — recovery flow.
@@ -189,7 +189,7 @@ For a full per-file purpose, see `pipeline.md` (Phase 0.3) and `inbound.md` (Pha
 - `lib/debug-notification-tag.ts`, `lib/show-debug-notification.ts`, `lib/push-client.ts` — client-side push helpers.
 - `lib/utils.ts` — single export `cn()` (shadcn helper). **Filename violates CLAUDE.md** — flagged below.
 - `lib/inbound/handle-inbound.ts` — inbound message handler (STOP/HELP/generic-ack).
-- `lib/providers/email.ts`, `web-push.ts`, `sms.ts` — outbound provider adapters with mock modes.
+- `lib/providers/email.ts`, `web-push.ts` — outbound provider adapters with mock modes.
 - `lib/reminders/run-{browser,email,expiry,persistence}-reminders.ts` — the four passes the cron route runs in order. `prayer-reminder-common.ts` is their shared core; `sent-reminder.ts` is the send-ledger helper; `cron-clocks.ts` is QA-clock support.
 
 ## Things to revisit
@@ -202,14 +202,12 @@ These are observations, not bugs to fix this session. Phase 0 is exploratory.
 
 3. **`public/file.svg`, `globe.svg`, `next.svg`, `vercel.svg`, `window.svg`** look like create-next-app boilerplate. Need to confirm none of them are referenced before removing in 0.7.
 
-4. **README.md describes the app as email + browser push only.** It does not mention SMS, premium tier, the Phase 1 schema additions, or `mawqit.app`. README will need a substantive rewrite after Phase 1, possibly Phase 2. Not Phase 0 work.
+4. **README.md describes the app as email + browser push only.** That much is accurate, but it does not mention the premium tier, the Phase 1 schema additions, or `mawqit.app`. README will need a substantive rewrite after Phase 1, possibly Phase 2. Not Phase 0 work.
 
 5. **No `vercel.json`** in the repo. PLAN.md §0.6 asks us to identify Vercel project config — there is none. Vercel deployment is presumably configured entirely through the Vercel dashboard. Worth confirming with the project owner during Phase 1.1.
 
-6. **SMS plumbing already exists.** `lib/providers/sms.ts` and a `ReminderChannel.sms` enum value are present in the schema, even though SMS is explicitly Phase 3. Need to check how much of it is real vs. stub during 0.4 (inbound) and 0.5 (test coverage). Do not delete in 0.7 cleanup — this is intentional groundwork.
+6. **The `calendar` value in the `ReminderChannel` enum** is present in schema, and PLAN.md ships the calendar feed in Phase 2.5. Pre-existing groundwork; do not treat as dead.
 
-7. **The `calendar` value in the `ReminderChannel` enum** is also present in schema, and PLAN.md ships the calendar feed in Phase 2.5. Same note: pre-existing groundwork; do not treat as dead.
+7. **`tsconfig.tsbuildinfo` is committed** as a tracked file according to `ls -la`, but `.gitignore` lists `*.tsbuildinfo`. The presence on disk is fine; verify in 0.7 that it's actually ignored by git (`git check-ignore`) and not tracked.
 
-8. **`tsconfig.tsbuildinfo` is committed** as a tracked file according to `ls -la`, but `.gitignore` lists `*.tsbuildinfo`. The presence on disk is fine; verify in 0.7 that it's actually ignored by git (`git check-ignore`) and not tracked.
-
-9. **`src/generated/prisma/` is gitignored** but exists locally. This is expected; mentioning so future sessions don't suspect it.
+8. **`src/generated/prisma/` is gitignored** but exists locally. This is expected; mentioning so future sessions don't suspect it.
