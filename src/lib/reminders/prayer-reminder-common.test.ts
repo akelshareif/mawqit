@@ -33,7 +33,7 @@ describe("prayerTimeForKey", () => {
     const pt = new PrayerTimes(
       coords,
       day,
-      getCalculationParameters("MuslimWorldLeague"),
+      getCalculationParameters({ prayerMethod: "MuslimWorldLeague" }),
     );
     expect(prayerTimeForKey(pt, "fajr")).toEqual(pt.fajr);
     expect(prayerTimeForKey(pt, "bad")).toEqual(pt.fajr);

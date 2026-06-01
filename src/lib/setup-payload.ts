@@ -1,5 +1,7 @@
 import { normalizeEmail } from "@/lib/normalize";
 import { isAllowedPrayerMethod } from "@/lib/prayer-method-options";
+import { isAllowedAsrMethod } from "@/lib/asr-method-options";
+import { isAllowedHighLatitudeRule } from "@/lib/high-latitude-options";
 
 const CADENCE = new Set([5, 15, 30]);
 const FOLLOWUP = new Set([15, 30, 60]);
@@ -16,6 +18,8 @@ export type SetupPayload = {
   followupEnabled: boolean;
   followupDelayMinutes: number;
   prayerMethod: string;
+  asrMethod: string;
+  highLatitudeRule: string;
 };
 
 function asBool(v: unknown): boolean | null {
@@ -114,6 +118,25 @@ export function parseSetupPayload(
     return { ok: false, error: "Select a valid prayer calculation method." };
   }
 
+  // Asr method and high-latitude rule default to adhan's own defaults when omitted,
+  // so older clients that don't send them keep the pre-1.3 behavior.
+  const asrMethodRaw =
+    typeof o.asrMethod === "string" ? o.asrMethod.trim() : "standard";
+  const asrMethod = asrMethodRaw === "" ? "standard" : asrMethodRaw;
+  if (!isAllowedAsrMethod(asrMethod)) {
+    return { ok: false, error: "Select a valid Asr method." };
+  }
+
+  const highLatitudeRuleRaw =
+    typeof o.highLatitudeRule === "string"
+      ? o.highLatitudeRule.trim()
+      : "middleofthenight";
+  const highLatitudeRule =
+    highLatitudeRuleRaw === "" ? "middleofthenight" : highLatitudeRuleRaw;
+  if (!isAllowedHighLatitudeRule(highLatitudeRule)) {
+    return { ok: false, error: "Select a valid high-latitude rule." };
+  }
+
   return {
     ok: true,
     data: {
@@ -128,6 +151,8 @@ export function parseSetupPayload(
       followupEnabled,
       followupDelayMinutes,
       prayerMethod,
+      asrMethod,
+      highLatitudeRule,
     },
   };
 }

@@ -79,6 +79,8 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
           followupEnabled: d.followupEnabled,
           followupDelayMinutes: d.followupDelayMinutes,
           prayerMethod: d.prayerMethod,
+          asrMethod: d.asrMethod,
+          highLatitudeRule: d.highLatitudeRule,
           expiresAt,
           sessionStatus: SessionStatus.active,
           expiryWarningSentAt: null,

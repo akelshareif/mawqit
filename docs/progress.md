@@ -1,8 +1,8 @@
 # Mawqit progress
 
-**Last updated:** 2026-06-01 12:00
+**Last updated:** 2026-06-01 15:00
 **Current phase:** Phase 1 — Production hardening
-**Currently working on:** SMS cut from scope — removed entirely (code, schema, docs) on branch refactor/remove-sms (PR #5). 1.4 merged (PR #3) and applied to Neon. Next per PLAN: 1.1+1.2 (domain + inbound email) or pure-code items 1.3/1.7.
+**Currently working on:** 1.3 prayer-time correctness complete on branch feat/prayer-correctness (PR pending) — Asr method + high-latitude rule are now configurable. SMS removal (PR #5) and 1.4 (PR #3) merged. Next per PLAN: 1.1+1.2 (domain + inbound email) or 1.7 (rate limiting).
 **Blocked:** none
 
 ## Phase 0 — Exploratory pass and cleanup
@@ -20,7 +20,7 @@
 
 - [ ] 1.1 Domain and email infrastructure
 - [ ] 1.2 Wire inbound email
-- [ ] 1.3 Prayer-time correctness
+- [x] 1.3 Prayer-time correctness
 - [x] 1.4 Schema migration
 - [ ] 1.5 Observability
 - [ ] 1.6 Legal and data
@@ -45,6 +45,21 @@
 - [ ] 3.4 Masjid outreach kit
 
 ## Recent activity
+
+2026-06-01 — Phase 1.3 prayer-time correctness, on branch feat/prayer-correctness.
+              Added two configurable Session fields: `asr_method` (standard/hanafi) and
+              `high_latitude_rule` (middle-of-night/seventh/twilight-angle), threaded
+              through getCalculationParameters → adhan Madhab/HighLatitudeRule and every
+              caller (dashboard, preview, email/browser/persistence passes, reminder-
+              cycle, inbound ack). Setup form: Asr radio + an Advanced disclosure for the
+              high-latitude rule. New option modules + validators; setup-payload validates
+              both, defaulting to adhan's prior implicit behavior so existing sessions are
+              unchanged. Migration 20260601120000_prayer_correctness (additive). Tests
+              added: Asr Hanafi-later-than-standard, DST spring/fall (NYC), high-latitude
+              (Reykjavík), setup-payload validation. No Hijri display exists, so PLAN's
+              "verify Hijri if displayed" is a no-op. Verified: tsc 0, lint 0, 110/110,
+              build 0. NOTE: two migrations now await `prisma migrate dev` on the DB —
+              remove_sms (PR #5) and this one.
 
 2026-06-01 — SMS cut from scope entirely (owner decision: A2P 10DLC overhead not worth
               it for a solo launch; email + browser push cover the need). Removed on

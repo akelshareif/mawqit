@@ -63,7 +63,11 @@ export async function runEmailReminderPass(
     const tz = loc.timezone;
 
     const coords = new Coordinates(lat, lng);
-    const params = getCalculationParameters(session.prayerMethod);
+    const params = getCalculationParameters({
+      prayerMethod: session.prayerMethod,
+      asrMethod: session.asrMethod,
+      highLatitudeRule: session.highLatitudeRule,
+    });
     const day = resolvePrayerDate(tz, reminderNow);
     const pt = new PrayerTimes(coords, day, params);
     const ymd = formatDateInTimeZone(reminderNow, tz);

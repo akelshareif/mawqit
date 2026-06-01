@@ -22,6 +22,8 @@ const initial: SetupFormInitial = {
   followupEnabled: false,
   followupDelayMinutes: 15,
   prayerMethod: "MuslimWorldLeague",
+  asrMethod: "standard",
+  highLatitudeRule: "middleofthenight",
 };
 
 describe("SetupForm", () => {

@@ -20,6 +20,8 @@ type Props = {
   longitude: string;
   timezone: string;
   prayerMethod: string;
+  asrMethod: string;
+  highLatitudeRule: string;
 };
 
 /**
@@ -30,6 +32,8 @@ export function PrayerTimesPreview({
   longitude,
   timezone,
   prayerMethod,
+  asrMethod,
+  highLatitudeRule,
 }: Props) {
   const parsed = useMemo(
     () => tryParsePrayerPreview(latitude, longitude, timezone, prayerMethod),
@@ -42,11 +46,12 @@ export function PrayerTimesPreview({
     }
     const { latitude: lat, longitude: lng, timeZone, prayerMethod: method } =
       parsed;
+    const calcOptions = { prayerMethod: method, asrMethod, highLatitudeRule };
     return {
-      rows: getDayPrayerRows(lat, lng, method, timeZone),
-      next: getNextPrayer(lat, lng, method, timeZone),
+      rows: getDayPrayerRows(lat, lng, calcOptions, timeZone),
+      next: getNextPrayer(lat, lng, calcOptions, timeZone),
     };
-  }, [parsed]);
+  }, [parsed, asrMethod, highLatitudeRule]);
 
   const ready = Boolean(parsed && rows && next);
 

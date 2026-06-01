@@ -54,6 +54,8 @@ type SessionStaleFields = {
   longitude: number | null;
   timezone: string | null;
   prayerMethod: string;
+  asrMethod?: string;
+  highLatitudeRule?: string;
 };
 
 /** True when the next prayer time after this cycle’s slot has passed (cycle is done for persistence). */
@@ -77,7 +79,11 @@ export function isReminderCycleStale(
   }
   const day = parseUtcDateFromYmd(ymdToday);
   const coords = new Coordinates(session.latitude, session.longitude);
-  const params = getCalculationParameters(session.prayerMethod);
+  const params = getCalculationParameters({
+    prayerMethod: session.prayerMethod,
+    asrMethod: session.asrMethod,
+    highLatitudeRule: session.highLatitudeRule,
+  });
   const pt = new PrayerTimes(coords, day, params);
   const nextKey = nextPrayerKeyAfter(cycle.prayerName);
   if (nextKey) {

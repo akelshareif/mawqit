@@ -1,6 +1,8 @@
 import {
   CalculationMethod,
   Coordinates,
+  HighLatitudeRule,
+  Madhab,
   Prayer,
   PrayerTimes,
 } from "adhan";
@@ -17,22 +19,56 @@ export type NextPrayerInfo = {
   time: Date;
 };
 
-/** Map stored `prayer_method` strings to adhan parameters. */
-export function getCalculationParameters(prayerMethod: string) {
-  switch (prayerMethod) {
-    case "MuslimWorldLeague":
-      return CalculationMethod.MuslimWorldLeague();
-    case "ISNA":
-      return CalculationMethod.NorthAmerica();
-    case "Egyptian":
-      return CalculationMethod.Egyptian();
-    case "UmmAlQura":
-      return CalculationMethod.UmmAlQura();
-    case "NorthAmerica":
-      return CalculationMethod.MoonsightingCommittee();
+/**
+ * The three knobs that determine prayer times for a location, as stored on a session.
+ * `asrMethod` and `highLatitudeRule` default to adhan's own defaults (standard Asr,
+ * middle-of-the-night), so omitting them preserves pre-1.3 behavior.
+ */
+export type PrayerCalcOptions = {
+  prayerMethod: string;
+  asrMethod?: string;
+  highLatitudeRule?: string;
+};
+
+function madhabFor(asrMethod: string | undefined) {
+  return asrMethod === "hanafi" ? Madhab.Hanafi : Madhab.Shafi;
+}
+
+function highLatitudeRuleFor(rule: string | undefined) {
+  switch (rule) {
+    case "seventhofthenight":
+      return HighLatitudeRule.SeventhOfTheNight;
+    case "twilightangle":
+      return HighLatitudeRule.TwilightAngle;
+    case "middleofthenight":
+      return HighLatitudeRule.MiddleOfTheNight;
     default:
-      return CalculationMethod.MuslimWorldLeague();
+      return HighLatitudeRule.MiddleOfTheNight;
   }
+}
+
+/** Map a session's stored calculation settings to adhan `CalculationParameters`. */
+export function getCalculationParameters(options: PrayerCalcOptions) {
+  const params = (() => {
+    switch (options.prayerMethod) {
+      case "MuslimWorldLeague":
+        return CalculationMethod.MuslimWorldLeague();
+      case "ISNA":
+        return CalculationMethod.NorthAmerica();
+      case "Egyptian":
+        return CalculationMethod.Egyptian();
+      case "UmmAlQura":
+        return CalculationMethod.UmmAlQura();
+      case "NorthAmerica":
+        return CalculationMethod.MoonsightingCommittee();
+      default:
+        return CalculationMethod.MuslimWorldLeague();
+    }
+  })();
+
+  params.madhab = madhabFor(options.asrMethod);
+  params.highLatitudeRule = highLatitudeRuleFor(options.highLatitudeRule);
+  return params;
 }
 
 /**
@@ -106,12 +142,12 @@ export function formatClockInTimeZone(
 export function getDayPrayerRows(
   latitude: number,
   longitude: number,
-  prayerMethod: string,
+  options: PrayerCalcOptions,
   timeZone: string,
   day: Date = resolvePrayerDate(timeZone),
 ): PrayerClockRow[] {
   const coords = new Coordinates(latitude, longitude);
-  const params = getCalculationParameters(prayerMethod);
+  const params = getCalculationParameters(options);
   const pt = new PrayerTimes(coords, day, params);
 
   return [
@@ -127,12 +163,12 @@ export function getDayPrayerRows(
 export function getNextPrayer(
   latitude: number,
   longitude: number,
-  prayerMethod: string,
+  options: PrayerCalcOptions,
   timeZone: string,
   now: Date = new Date(),
 ): NextPrayerInfo {
   const coords = new Coordinates(latitude, longitude);
-  const params = getCalculationParameters(prayerMethod);
+  const params = getCalculationParameters(options);
   const day = resolvePrayerDate(timeZone, now);
   const pt = new PrayerTimes(coords, day, params);
   const nextKey = pt.nextPrayer(now);

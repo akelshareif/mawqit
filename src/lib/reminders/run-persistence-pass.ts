@@ -77,6 +77,8 @@ export async function runPersistencePass(
           longitude: loc.longitude,
           timezone: loc.timezone,
           prayerMethod: session.prayerMethod,
+          asrMethod: session.asrMethod,
+          highLatitudeRule: session.highLatitudeRule,
         },
         cycle,
         reminderNow,
