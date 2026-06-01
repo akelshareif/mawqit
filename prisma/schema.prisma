@@ -67,7 +67,11 @@ model Session {
   followupEnabled           Boolean @default(false) @map("followup_enabled")
   followupDelayMinutes      Int     @default(30) @map("followup_delay_minutes")
 
-  prayerMethod String @default("MuslimWorldLeague") @map("prayer_method") @db.VarChar(64)
+  prayerMethod     String @default("MuslimWorldLeague") @map("prayer_method") @db.VarChar(64)
+  /// Asr juristic method: `standard` (Shafi/Maliki/Hanbali) or `hanafi`.
+  asrMethod        String @default("standard") @map("asr_method") @db.VarChar(16)
+  /// High-latitude twilight rule: `middleofthenight`, `seventhofthenight`, or `twilightangle`.
+  highLatitudeRule String @default("middleofthenight") @map("high_latitude_rule") @db.VarChar(32)
 
   expiresAt     DateTime?     @map("expires_at") @db.Timestamptz
   sessionStatus SessionStatus @default(active) @map("session_status")
