@@ -274,7 +274,7 @@ Migrations are in [`prisma/migrations/`](../../prisma/migrations/). Each is a di
 | 5 | `20260330120000_slice7_reminder_cycles` | Creates `reminder_cycles` with the composite unique constraint that defines a cycle |
 | 6 | `20260406202035_slice7` | Renames a single index on `reminder_cycles` (cosmetic — Prisma rename to fit Postgres' 63-char identifier limit). No schema-shape change. |
 | 7 | `20260531120000_phase_1_4_schema` | **Phase 1.4.** Drops `latitude`, `longitude`, `timezone`, `email_address`, `phone_number` from `sessions`. Adds enums `RecipientType`, `SubscriptionTier`, `SubscriptionStatus`. Creates `saved_locations`, `notification_recipients` (both cascade), `subscriptions` (FK `SET NULL` + `deleted_at`), `donations` (no session link). Authored offline via `prisma migrate diff`; apply with `prisma migrate dev`. |
-| 8 | `20260601000000_remove_sms` | **SMS removal (2026-06-01).** Drops sms from ReminderChannel and RecipientType enums; drops Session.sms_enabled. |
+| 8 | `20260601000000_remove_sms` | **SMS removal (2026-06-01).** Drops sms from ReminderChannel and RecipientType enums; drops Session.sms_enabled. Drops and recreates the two `sent_reminders` partial unique indexes (their WHERE predicates reference channel literals, so Postgres can't retype the column underneath them) — recreated without `'sms'`. |
 | 9 | `20260601120000_prayer_correctness` | **Phase 1.3.** Adds `Session.asr_method` (default `standard`) and `Session.high_latitude_rule` (default `middleofthenight`). Additive; defaults equal adhan's prior implicit behavior, so existing sessions are unchanged. |
 
 `migration_lock.toml` pins the provider to `postgresql`.
