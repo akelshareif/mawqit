@@ -46,6 +46,8 @@ The shareable-link credential. The session ID itself is the auth — anyone with
 | `followupEnabled` | `followup_enabled` | `boolean` | default `false` |
 | `followupDelayMinutes` | `followup_delay_minutes` | `integer` | default `30` |
 | `prayerMethod` | `prayer_method` | `varchar(64)` | default `'MuslimWorldLeague'` (one of adhan's calculation methods) |
+| `asrMethod` | `asr_method` | `varchar(16)` | default `'standard'`; `standard` (Shafi) or `hanafi`. Maps to adhan `Madhab`. *(Phase 1.3)* |
+| `highLatitudeRule` | `high_latitude_rule` | `varchar(32)` | default `'middleofthenight'`; `middleofthenight` / `seventhofthenight` / `twilightangle`. Maps to adhan `HighLatitudeRule`. *(Phase 1.3)* |
 | `expiresAt` | `expires_at` | `timestamptz?` | session validity window |
 | `sessionStatus` | `session_status` | `SessionStatus` | default `active` |
 | `expiryWarningSentAt` | `expiry_warning_sent_at` | `timestamptz?` | "your link expires in N days" idempotency marker |
@@ -273,6 +275,7 @@ Migrations are in [`prisma/migrations/`](../../prisma/migrations/). Each is a di
 | 6 | `20260406202035_slice7` | Renames a single index on `reminder_cycles` (cosmetic — Prisma rename to fit Postgres' 63-char identifier limit). No schema-shape change. |
 | 7 | `20260531120000_phase_1_4_schema` | **Phase 1.4.** Drops `latitude`, `longitude`, `timezone`, `email_address`, `phone_number` from `sessions`. Adds enums `RecipientType`, `SubscriptionTier`, `SubscriptionStatus`. Creates `saved_locations`, `notification_recipients` (both cascade), `subscriptions` (FK `SET NULL` + `deleted_at`), `donations` (no session link). Authored offline via `prisma migrate diff`; apply with `prisma migrate dev`. |
 | 8 | `20260601000000_remove_sms` | **SMS removal (2026-06-01).** Drops sms from ReminderChannel and RecipientType enums; drops Session.sms_enabled. |
+| 9 | `20260601120000_prayer_correctness` | **Phase 1.3.** Adds `Session.asr_method` (default `standard`) and `Session.high_latitude_rule` (default `middleofthenight`). Additive; defaults equal adhan's prior implicit behavior, so existing sessions are unchanged. |
 
 `migration_lock.toml` pins the provider to `postgresql`.
 
