@@ -170,6 +170,22 @@ Observability. One row per cron invocation, written at the start (`status='runni
 
 No FK, no `session_id` — this is global. PK on `id` is the only index.
 
+### `WebhookEvent` → table `webhook_events` *(Phase 1.2)*
+
+Idempotency ledger for verified inbound webhook deliveries. One row per processed
+delivery, keyed by the provider's Svix message id, so a retried delivery is
+processed at most once. Written by [`claimWebhookEvent`](../../src/lib/inbound/webhook-idempotency.ts)
+and deleted by `releaseWebhookEvent` when post-claim processing fails.
+
+| Field | Column | Type | Notes |
+|---|---|---|---|
+| `id` | `id` | `text PK` | Svix message id (`svix-id` header) |
+| `source` | `source` | `varchar(32)` | e.g. `resend` |
+| `type` | `type` | `varchar(64)` | e.g. `email.received` |
+| `receivedAt` | `received_at` | `timestamp(3)` | default `now()` |
+
+No FK, no `session_id` — global. PK on `id` is the only index.
+
 ### `SavedLocation` → table `saved_locations` *(Phase 1.4)*
 
 A session's location(s). The `is_active = true` row drives prayer-time calculation.
@@ -276,6 +292,7 @@ Migrations are in [`prisma/migrations/`](../../prisma/migrations/). Each is a di
 | 7 | `20260531120000_phase_1_4_schema` | **Phase 1.4.** Drops `latitude`, `longitude`, `timezone`, `email_address`, `phone_number` from `sessions`. Adds enums `RecipientType`, `SubscriptionTier`, `SubscriptionStatus`. Creates `saved_locations`, `notification_recipients` (both cascade), `subscriptions` (FK `SET NULL` + `deleted_at`), `donations` (no session link). Authored offline via `prisma migrate diff`; apply with `prisma migrate dev`. |
 | 8 | `20260601000000_remove_sms` | **SMS removal (2026-06-01).** Drops sms from ReminderChannel and RecipientType enums; drops Session.sms_enabled. Drops and recreates the two `sent_reminders` partial unique indexes (their WHERE predicates reference channel literals, so Postgres can't retype the column underneath them) — recreated without `'sms'`. |
 | 9 | `20260601120000_prayer_correctness` | **Phase 1.3.** Adds `Session.asr_method` (default `standard`) and `Session.high_latitude_rule` (default `middleofthenight`). Additive; defaults equal adhan's prior implicit behavior, so existing sessions are unchanged. |
+| 10 | `20260602120000_webhook_events` | **Phase 1.2.** Creates `webhook_events` (text PK = Svix message id, `source`, `type`, `received_at`) — the inbound-webhook idempotency ledger. Additive, no FK. Apply with `prisma migrate dev`. |
 
 `migration_lock.toml` pins the provider to `postgresql`.
 

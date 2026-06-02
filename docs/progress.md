@@ -1,9 +1,9 @@
 # Mawqit progress
 
-**Last updated:** 2026-06-01 15:00
+**Last updated:** 2026-06-02 11:00
 **Current phase:** Phase 1 — Production hardening
-**Currently working on:** 1.3 prayer-time correctness complete on branch feat/prayer-correctness (PR pending) — Asr method + high-latitude rule are now configurable. SMS removal (PR #5) and 1.4 (PR #3) merged. Next per PLAN: 1.1+1.2 (domain + inbound email) or 1.7 (rate limiting).
-**Blocked:** none
+**Currently working on:** 1.2 inbound email — code complete on branch feat/inbound-email-webhook (PR pending). `/api/inbound/email` wired to Resend (Svix signature verify + `email.received` body fetch + idempotency), plus a runbook for the 1.1/1.2 out-of-repo setup. 1.3 and 1.4 merged (PRs #6/#3). Remaining in Phase 1: 1.1 (owner: domain/DNS/Resend), 1.5, 1.6, 1.7, 1.8.
+**Blocked:** none (1.2's production acceptance test awaits owner doing the out-of-repo setup in docs/runbooks/email-infrastructure-setup.md — tracked under Open questions, not a code blocker)
 
 ## Phase 0 — Exploratory pass and cleanup
 
@@ -45,6 +45,24 @@
 - [ ] 3.4 Masjid outreach kit
 
 ## Recent activity
+
+2026-06-02 — Phase 1.2 inbound email (code), on branch feat/inbound-email-webhook.
+              Wired the real Resend inbound webhook at `/api/inbound/email`: Svix
+              signature verification (manual HMAC-SHA256, `RESEND_WEBHOOK_SECRET`,
+              new `verify-resend-webhook.ts`), `email.received` body fetch via
+              `resend.emails.receiving.get` (webhook is metadata-only — new
+              `fetch-received-email.ts`), and idempotency on the `svix-id`
+              (claim/release + new `webhook_events` table, migration
+              20260602120000). Route extracts the bare From address
+              (`extractEmailAddress` in normalize.ts) then calls the existing
+              `handleInbound`. Tests: verify (6), idempotency (4), route (7) — 127/127
+              total. Wrote docs/runbooks/email-infrastructure-setup.md (the full
+              out-of-repo runbook for 1.1 + 1.2: domain, DNS, Resend DKIM/SPF/DMARC,
+              receiving MX, webhook endpoint, secret, end-to-end STOP test) and added
+              it to the CLAUDE.md doc index. Updated env/inbound/schema context docs.
+              Verified: tsc 0, lint 0, tests 127/127, build 0. NOTE: webhook_events
+              migration must be applied (`prisma migrate deploy`) before the webhook
+              goes live.
 
 2026-06-01 — Phase 1.3 prayer-time correctness, on branch feat/prayer-correctness.
               Added two configurable Session fields: `asr_method` (standard/hanafi) and
@@ -168,13 +186,26 @@
 ## Blockers
 
 (The 2026-05-31 Neon-unreachable blocker is resolved: the Phase 1.4 migration was
-applied and `prisma migrate status` reports the schema up to date. **New:** the
-SMS-removal migration `20260601000000_remove_sms` (PR #5) must be applied to the DB
-with `prisma migrate dev`.)
+applied and `prisma migrate status` reports the schema up to date. **Pending DB
+apply** (`prisma migrate dev` locally / `prisma migrate deploy` in prod): the
+SMS-removal migration `20260601000000_remove_sms` (PR #5) and the new Phase 1.2
+`20260602120000_webhook_events`. Both are additive/safe.)
 
 ## Open questions for the project owner
 
-- `src/app/api/webhooks/resend/` directory exists but is empty. Project owner is unsure of intent. Default plan: leave it untouched in 0.7 (do not remove, do not write a route into it) and revisit at the start of Phase 1.2 when the real inbound webhook is wired. If the project owner reaches a decision earlier, log it here.
+- **Phase 1.2 production cutover (action needed).** The inbound code is merged but
+  receives nothing until the out-of-repo setup is done. Follow
+  `docs/runbooks/email-infrastructure-setup.md` end to end (this is also Phase 1.1):
+  register `mawqit.app`, DNS + Vercel domain, Resend domain verification
+  (DKIM/SPF/DMARC), set `RESEND_API_KEY`/`RESEND_FROM`/`NEXT_PUBLIC_APP_URL`, enable
+  receiving (MX), add the webhook endpoint → `/api/inbound/email` on `email.received`,
+  set `RESEND_WEBHOOK_SECRET`, apply the `webhook_events` migration, then run the
+  STOP/HELP acceptance test. Tick 1.1 and 1.2 once the real STOP test passes.
+
+- ~~`src/app/api/webhooks/resend/` directory exists but is empty.~~ **Resolved
+  (2026-06-02):** the real inbound route lives at `/api/inbound/email` (Phase 1.2).
+  The empty `webhooks/resend/` dir is unrelated leftover scaffolding — left in place
+  for now; safe to delete in a future cleanup pass (noted in inbound.md).
 
 ## Resolved decisions
 

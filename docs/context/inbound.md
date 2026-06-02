@@ -2,17 +2,31 @@
 
 How Mawqit handles inbound messages (STOP, HELP, generic acks) and how channel-state toggles flow between user UI, STOP replies, and the cron passes. Source of truth: [`src/lib/inbound/handle-inbound.ts`](../../src/lib/inbound/handle-inbound.ts) and [`src/lib/session-channel-status.ts`](../../src/lib/session-channel-status.ts). Update this doc whenever those files change.
 
-## Status: not yet wired to a real webhook
+## Status: wired to the Resend inbound webhook (Phase 1.2)
 
-There is **no real inbound webhook in production today.** [`handleInbound`](../../src/lib/inbound/handle-inbound.ts) is invoked from exactly one place:
+[`handleInbound`](../../src/lib/inbound/handle-inbound.ts) is invoked from two places:
 
 | Caller | File | Notes |
 |---|---|---|
+| Resend webhook | [`POST /api/inbound/email`](../../src/app/api/inbound/email/route.ts) | The real production inbound. Verifies the Svix signature, dedupes retries, fetches the body, then calls `handleInbound`. Rate-limited 120/min per IP. |
 | Debug simulator | [`POST /api/debug/simulate-inbound`](../../src/app/api/debug/simulate-inbound/route.ts) | Gated by `ENABLE_DEBUG_TOOLS=true`. Returns 404 in production. Rate-limited 30/min. |
 
-The directory [`src/app/api/webhooks/resend/`](../../src/app/api/webhooks/resend/) exists but is empty — see the open question in [`progress.md`](../progress.md). Phase 1.2 lands the real Resend inbound at `/api/inbound/email` per [`PLAN.md` §1.2](../PLAN.md), not at the existing empty directory.
+### The `/api/inbound/email` flow
 
-So today, the only way an inbound STOP, HELP, or ack message can reach the database is if a developer with debug tools enabled hits the simulator route. Real users replying to a Mawqit reminder get nothing back.
+Resend's inbound feature POSTs an `email.received` event when a reply lands on the receiving address. The route:
+
+1. **Rate-limits** per IP (120/min) before any work.
+2. **Verifies the Svix signature** over the raw body via [`verifyResendWebhook`](../../src/lib/inbound/verify-resend-webhook.ts) using `RESEND_WEBHOOK_SECRET`. Unset secret → `500` (fails closed); bad/missing/stale signature → `401`.
+3. **Ignores non-`email.received` types** with `200` (`outcome: "ignored_type"`) so Resend doesn't retry events we don't handle.
+4. **Dedupes** on the `svix-id` via [`claimWebhookEvent`](../../src/lib/inbound/webhook-idempotency.ts) (a `webhook_events` row, id = svix message id). A second delivery of the same id → `200` (`outcome: "duplicate"`), no side effects.
+5. **Fetches the body** — the webhook carries metadata only, so [`fetchReceivedEmail`](../../src/lib/inbound/fetch-received-email.ts) calls `resend.emails.receiving.get(email_id)` for the sender and plain-text body.
+6. **Extracts the bare address** from the `From` header (`Name <addr>` → `addr`) via [`extractEmailAddress`](../../src/lib/normalize.ts) and calls `handleInbound(prisma, "email", from, text)`.
+
+If any step after the claim throws, the route **releases the claim** ([`releaseWebhookEvent`](../../src/lib/inbound/webhook-idempotency.ts)) and returns `500` so Resend's retry can re-process it — claim → act → release-on-failure.
+
+The directory [`src/app/api/webhooks/resend/`](../../src/app/api/webhooks/resend/) (an old empty scaffold) is unrelated; the route lives at `/api/inbound/email` per [`PLAN.md` §1.2](../PLAN.md). It can be removed in a future cleanup.
+
+**Out-of-repo setup** (domain verification, receiving address, webhook endpoint, secret) is documented in [`docs/runbooks/email-infrastructure-setup.md`](../runbooks/email-infrastructure-setup.md). Until that is done in production, the route is built but receives nothing.
 
 ## `handleInbound` contract
 
@@ -171,7 +185,7 @@ Each outbound reply writes its own `message_log` row via the provider — direct
 
 ## Things to revisit
 
-1. **No real inbound webhook is wired.** Phase 1.2 will land `/api/inbound/email` connected to Resend. The signature-verification and idempotency-key handling for Resend webhook events doesn't exist anywhere in the repo today — both will need to be written from scratch.
+1. ~~**No real inbound webhook is wired.**~~ **Done (Phase 1.2).** `/api/inbound/email` is wired to Resend with Svix signature verification ([`verify-resend-webhook.ts`](../../src/lib/inbound/verify-resend-webhook.ts)) and idempotency on the `svix-id` ([`webhook-idempotency.ts`](../../src/lib/inbound/webhook-idempotency.ts) + the `webhook_events` table). See "The `/api/inbound/email` flow" above. Production still needs the out-of-repo Resend setup before it receives traffic.
 
 2. ~~**Inbound `from` is normalized but stored values may not be.**~~ **Correction (verified during 0.5):** stored emails *are* normalized. [`parseSetupPayload`](../../src/lib/setup-payload.ts) calls `normalizeEmail` on every save, so both sides of the lookup go through the same lowercase+trim. No mismatch risk. Leaving the strikethrough as a record of the verification.
 

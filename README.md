@@ -85,6 +85,7 @@ Everything else is optional for a first run. [`.env.example`](.env.example) list
 | `RESEND_API_KEY` | [Resend](https://resend.com) API key. If unset, outbound email is **mock** (logged to `message_log` only). |
 | `RESEND_FROM` | Verified sender, e.g. `Mawqit <noreply@yourdomain.com>`. Required together with `RESEND_API_KEY` for real sends. |
 | `EMAIL_FORCE_MOCK` | `true` keeps mock email even when Resend env is set (useful for tests or local development). |
+| `RESEND_WEBHOOK_SECRET` | Signing secret (`whsec_…`) for the Resend inbound webhook. Required for `POST /api/inbound/email` to accept `email.received` deliveries; unset rejects every inbound with `500`. See [`docs/runbooks/email-infrastructure-setup.md`](docs/runbooks/email-infrastructure-setup.md). |
 
 ### Web Push (defaults)
 
