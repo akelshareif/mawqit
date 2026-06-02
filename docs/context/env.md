@@ -7,7 +7,7 @@
 > [inbound](./inbound.md), [schema](./schema.md), [tests](./tests.md),
 > [repo-map](./repo-map.md).
 
-**Status as of 2026-05-31:** **21 variables are read by application code.** They are
+**Status as of 2026-06-02:** **22 variables are read by application code** (`RESEND_WEBHOOK_SECRET` added in Phase 1.2). They are
 declared (with commented guidance) in [`.env.example`](../../.env.example) and
 documented in the README's "Environment variables" section. A handful of
 `.env.example` entries are declared but **not yet read by any code** — tracked under
@@ -54,9 +54,10 @@ what keeps dev and CI from ever paying for a real send.
 
 | Variable | Secret | Required | Notes |
 |---|---|---|---|
-| `RESEND_API_KEY` | yes | for real sends | Real provider requires this **and** `RESEND_FROM`; otherwise `createEmailProvider` returns the mock. |
+| `RESEND_API_KEY` | yes | for real sends | Real provider requires this **and** `RESEND_FROM`; otherwise `createEmailProvider` returns the mock. Also used by [`fetch-received-email.ts`](../../src/lib/inbound/fetch-received-email.ts) to pull an inbound email's body by id. |
 | `RESEND_FROM` | no | for real sends | The `From:` address (e.g. `Mawqit <noreply@domain>`). |
 | `EMAIL_FORCE_MOCK` | no | no | `"true"` forces mock even when Resend is fully configured. The sacred email mock switch. |
+| `RESEND_WEBHOOK_SECRET` | yes | for inbound | Svix signing secret (`whsec_…`) for the Resend inbound webhook. Read by [`verify-resend-webhook.ts`](../../src/lib/inbound/verify-resend-webhook.ts); unset makes `/api/inbound/email` reject every delivery with `500` (fails closed). |
 
 ### Web Push — VAPID ([`providers/web-push.ts`](../../src/lib/providers/web-push.ts), `env.ts`)
 

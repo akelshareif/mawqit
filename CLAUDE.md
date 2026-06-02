@@ -110,6 +110,7 @@ Use this to find the right doc for the question at hand. Don't load everything â
 | `docs/context/inbound.md` | You're touching the inbound webhook or `handleInbound`. *(Created in Phase 0.)* |
 | `docs/context/tests.md` | You're writing or extending tests. *(Created in Phase 0.)* |
 | `docs/context/env.md` | You're touching environment variables or deployment config. *(Created in Phase 0.)* |
+| `docs/runbooks/email-infrastructure-setup.md` | You or the owner need the out-of-repo steps for domain, DNS, Resend domain verification, and the inbound webhook (Phases 1.1 + 1.2). |
 | `docs/phases/phase_<n>_summary.md` | You want to know what a previous phase built or why decisions were made. |
 | `README.md` | Almost never; it's for new humans, not you. |
 
