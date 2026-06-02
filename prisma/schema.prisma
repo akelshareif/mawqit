@@ -251,6 +251,18 @@ model SentReminder {
   @@map("sent_reminders")
 }
 
+/// Idempotency ledger for verified inbound webhook deliveries. Keyed by the
+/// provider's Svix message id (`svix-id` header) so a retried delivery is
+/// processed at most once. See `src/lib/inbound/webhook-idempotency.ts`.
+model WebhookEvent {
+  id         String   @id
+  source     String   @db.VarChar(32)
+  type       String   @db.VarChar(64)
+  receivedAt DateTime @default(now()) @map("received_at")
+
+  @@map("webhook_events")
+}
+
 model CronRun {
   id                String        @id @default(uuid())
   startedAt         DateTime      @default(now()) @map("started_at")
